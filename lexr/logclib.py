@@ -80,21 +80,31 @@ class Logc(loglib.Logc, metaclass=loglib.LogcMeta):
     def dumpNodeTreePhase__1(self, mach):
         return self.dumpNodeTreeGo(mach, '[dumpNodeTreePhase] ')
 
+    def evaLookup__0(self, f0): return f0
+        
+    def evaLookup__1(self, f0):
+        def f1(obj, spec, segV, diag):
+            with self.logr(f'[evaLookup] {util.desTyp(obj)} {spec=} {segV=!r}'):
+                res = f0(obj, spec, segV, diag)
+                self.logr(f'res: {util.desTyp(res)}')
+                return res
+        return f1
+
     def evaObj__0(self, f0): return f0
         
     def evaObj__1(self, f0):
         def f1(obj, spec):
-            with self.logr(f'[evaObj] {util.desTyp(obj)} {spec=}'):
+            with self.logr(f'[eva] {util.desTyp(obj)} {spec=}'):
                 res = f0(obj, spec)
                 self.logr(f'res: {util.desTyp(res)}')
                 return res
         return f1
 
-    def evaObjLst__0(self, f0): return f0
+    def evaLst__0(self, f0): return f0
         
-    def evaObjLst__1(self, f0):
+    def evaLst__1(self, f0):
         def f1(obj, spec, lst):
-            with self.logr(f'[evaObjLst] {util.desTyp(obj)} {spec=}'):
+            with self.logr(f'[evaLst] {util.desTyp(obj)} {spec=}'):
                 self.logr(f'lst: {util.des0(lst)}')
                 res = f0(obj, spec, lst)
                 self.logr(f'res: {util.desTyp(res)}')

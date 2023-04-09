@@ -8,13 +8,10 @@ import util
 import functools
 
 #======================================================================================================================
-# FunObj
+# OpFunObj
 #======================================================================================================================
 
-class FunObj(objlib.ObjBase):
-    pass
-
-class OpFunObj(FunObj):
+class OpFunObj(objlib.ObjBase):
     def __init__(self, mach, diag, op):
         super().__init__(mach, diag)
         self.op = op
@@ -31,10 +28,10 @@ class OpFunObj(FunObj):
 #======================================================================================================================
 
 class BinopFunObj(OpFunObj):
-    @g_logc.evaObjLst
+    @g_logc.evaLst
     def evaLst(self, spec, lst):
         if 3 > len(lst.argV):
-            raise ArgNException(lst)
+            raise objlib.ArgNException(lst)
         argV = [self]
         runP = 0 
         for arg in lst.argV[1:]:
@@ -62,10 +59,10 @@ class BinopRunObj(objlib.RunCallObj):
 #======================================================================================================================
 
 class BinopAssignFunObj(OpFunObj):
-    @g_logc.evaObjLst
+    @g_logc.evaLst
     def evaLst(self, spec, lst):
         if 3 > len(lst.argV):
-            raise ArgNException(lst)
+            raise objlib.ArgNException(lst)
         argV = [self, (arg := lst.argV[1].eva(objlib.Spec.St))]
         runP = arg.runP()
         for arg in lst.argV[2:]:
@@ -93,10 +90,10 @@ class BinopAssignRunObj(objlib.RunCallObj):
 #======================================================================================================================
 
 class AssignFunObj(OpFunObj):
-    @g_logc.evaObjLst
+    @g_logc.evaLst
     def evaLst(self, spec, lst):
         if 3 > len(lst.argV):
-            raise ArgNException(lst)
+            raise objlib.ArgNException(lst)
         argV = [self]
         runP = 0
         for arg in lst.argV[1:-1]:
@@ -128,8 +125,8 @@ class AssignRunObj(objlib.RunCallObj):
 # List
 #======================================================================================================================
 
-class ListFunObj(FunObj):
-    @g_logc.evaObjLst
+class ListFunObj(objlib.ObjBase):
+    @g_logc.evaLst
     def evaLst(self, spec, lst):
         argV = [arg.eva(objlib.Spec.Ld) for arg in lst.argV[1:]]
         return objlib.ForeignObj(self.mach, lst.diag, argV)
@@ -138,10 +135,10 @@ class ListFunObj(FunObj):
 # VoidRet
 #======================================================================================================================
 
-class VoidRetFunObj(FunObj):
-    @g_logc.evaObjLst
+class VoidRetFunObj(objlib.ObjBase):
+    @g_logc.evaLst
     def evaLst(self, spec, lst):
         if 2 > len(lst.argV):
-            raise ArgNException(lst)
+            raise objlib.ArgNException(lst)
         lst.argV[1].eva(objlib.Spec.Ld).evaLst(spec, objlib.LstObj(self.mach, lst.diag, lst.argV[1:]))
         return self.mach.voidObj

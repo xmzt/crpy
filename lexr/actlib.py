@@ -20,7 +20,7 @@ class ForActObj(objlib.CallObjBase):
     @g_logc.chainObj
     def chain(self, chainV, chainI, prev):
         if 3 != len(self.argV):
-            raise ArgNException(self)
+            raise objlib.ArgNException(self)
         dst = self.argV[1].eva(objlib.Spec.St)
         for x in self.argV[2].eva(objlib.Spec.Ld).asList():
             dst.evaAssign(x)
@@ -33,7 +33,7 @@ class IfActObj(objlib.CallObjBase):
     @g_logc.chainObj
     def chain(self, chainV, chainI, prev):
         if 3 > len(self.argV):
-            raise ArgNException(self)
+            raise objlib.ArgNException(self)
         prev.chainTo(node := nodelib.NodeIf(self.mach, self.diag, self.argV[1].eva(objlib.Spec.Ld)))
         thenChainV = self.argV[2:]
         thenChainV.append(nodelib.ChainTermObj(self.mach, self.diag))
@@ -47,7 +47,7 @@ class InsertActObj(objlib.CallObjBase):
     @g_logc.chainObj
     def chain(self, chainV, chainI, prev):
         if 1 != len(self.argV):
-            raise ArgNException(self)
+            raise objlib.ArgNException(self)
         x = chainV[-1] = nodelib.ChainTermInsertObj(self.mach, self.diag, prev, nodelib.NodeCond(self.mach, self.diag))
         chainV[chainI].chain(chainV, chainI+1, x.head)
 
@@ -58,7 +58,7 @@ class LineIncActObj(objlib.CallObjBase):
     @g_logc.chainObj
     def chain(self, chainV, chainI, prev):
         if 1 != len(self.argV):
-            raise ArgNException(self)
+            raise objlib.ArgNException(self)
         prev.chainTo(node := nodelib.NodeToLineInc(self.mach, self.diag))
         chainV[chainI].chain(chainV, chainI+1, node)
 
@@ -69,7 +69,7 @@ class OffAssignActObj(objlib.CallObjBase):
     @g_logc.chainObj
     def chain(self, chainV, chainI, prev):
         if 2 != len(self.argV):
-            raise ArgNException(self)
+            raise objlib.ArgNException(self)
         prev.offSet(self.argV[1].eva(objlib.Spec.Ld).asInt())
         chainV[chainI].chain(chainV, chainI+1, prev)
 
@@ -77,7 +77,7 @@ class OffDecActObj(objlib.CallObjBase):
     @g_logc.chainObj
     def chain(self, chainV, chainI, prev):
         if 2 != len(self.argV):
-            raise ArgNException(self)
+            raise objlib.ArgNException(self)
         prev.chainTo(node := nodelib.NodeToOffDec(self.mach, self.diag, self.argV[1].eva(objlib.Spec.Ld).asInt()))
         chainV[chainI].chain(chainV, chainI+1, node)
 
@@ -88,7 +88,7 @@ class SameToActObj(objlib.CallObjBase):
     @g_logc.chainObj
     def chain(self, chainV, chainI, prev):
         if 2 != len(self.argV):
-            raise ArgNException(self)
+            raise objlib.ArgNException(self)
         prev.chainToSameTo(node := self.argV[1].eva(objlib.Spec.Ld).asNode())
         chainV[chainI].chain(chainV, chainI+1, node)
 
@@ -99,7 +99,7 @@ class SrcAssignActObj(objlib.CallObjBase):
     @g_logc.chainObj
     def chain(self, chainV, chainI, prev):
         if 2 != len(self.argV):
-            raise ArgNException(self)
+            raise objlib.ArgNException(self)
         callArgV = [getattr(self.mach.scope, '='), self.mach.scope.src, self.argV[1].eva(objlib.Spec.Ld)]
         callObj = funlib.AssignRunObj(self.mach, self.diag, callArgV)
         prev.chainTo(node := nodelib.NodeToCallSrcAssign(self.mach, self.diag, callObj))
@@ -114,14 +114,14 @@ class SrcIncActObj(objlib.CallObjBase):
             node = nodelib.NodeToSrcIncArg(self.mach, self.diag, self.argV[1].eva(objlib.Spec.Ld).asInt())
             prev.chainTo(node)
         else:
-            raise ArgNException(self)
+            raise objlib.ArgNException(self)
         chainV[chainI].chain(chainV, chainI+1, node)
 
 class SrcIncFromActObj(objlib.CallObjBase):
     @g_logc.chainObj
     def chain(self, chainV, chainI, prev):
         if 2 != len(self.argV):
-            raise ArgNException(self)
+            raise objlib.ArgNException(self)
         node0 = self.argV[1].eva(objlib.Spec.Ld).asNode()
         prev.chainTo(node := nodelib.NodeToSrcIncFrom(self.mach, self.diag, node0))
         chainV[chainI].chain(chainV, chainI+1, node)
@@ -154,6 +154,6 @@ class TermActObj(objlib.CallObjBase):
     @g_logc.chainObj
     def chain(self, chainV, chainI, prev):
         if 1 != len(self.argV):
-            raise ArgNException(self)
+            raise objlib.ArgNException(self)
         prev.chainTo(node := nodelib.NodeToTerm(self.mach, self.diag))
         chainV[chainI].chain(chainV, chainI+1, node)

@@ -17,7 +17,7 @@ import sys
 
 logr = loglib.Logr5File()
 g_logc = logclib.g_logc = logclib.Logc().logrSet(logr).dumpNodeTreeInit('t.nodetree.log.').kvSet(
-    des=1, err=1, eva=0, chain=0, dumpNodeTree=0, code=0, insert=0, off=0, phase=1, scan=0, scope=0, unredun=0,
+    err=1, chain=0, code=0, dumpNodeTreePhase=0, eva=0, insert=0, off=0, phase=1, scan=0, scope=0, unredun=0,
 )
 
 import machlib
@@ -38,14 +38,41 @@ def gram0(mach):
     (@ = bs      '\\')
     (@ = nul     '\0')
     (@ = wsAll   [\0- \x7f])
-    #(glo AccTyp TokErr TokTyp Ws)
-    #(dtyp bsuI int)
+
+    # run-time global symbols
+    (@ sym AccTyp)
+    (@ sym TokErr)
+    (@ sym TokTyp)
+    (@ sym Ws)
+
+    # run-time members token
+    (@ mem accTyp)
+    (@ mem tokSrc srcPtr)
+    (@ mem tokTyp)
+    (@ mem tokWs)
+
+    # run-time members temporary
+    (@ mem bsuI int)
+    (@ mem quoteCh str)
+    (@ mem srcTmp0 srcPtr)
+    (@ mem tmpU int)
+    (@ mem tmpV int)
+
+    # run-time methods
+    (@ mem acc None None str)
+    (@ mem errPos)
+    (@ mem errText)
+    (@ mem tokAdd)
+    (@ mem tokAddAcc)
     
+    #------------------------------------------------------------------------------------------------------------------
+    # whitespace
+
     START     (off= 0) (= tokWs Ws._0) WS
     WS wsH    (|= tokWs Ws.H) (src+) WS
     (@ = condNemptyEn 0) WS (for eol eolV)  (|= tokWs Ws.Eol) (src+) (line+) WS
     WS nul    (= tokSrc src) (|= tokWs Ws.Eol Ws.Eof) (= tokTyp TokTyp.Eof) (tokAdd) (term)
-    WS *      (= tokSrc src) OTHER (acc srcCh) (= accTyp AccTyp._0) (= tokTyp TokTyp.Other) (tokAddAcc) (src+) START
+    WS *      (= tokSrc src) (acc *src) (= accTyp AccTyp._0) (= tokTyp TokTyp.Other) (tokAddAcc) (src+) START
 
     #------------------------------------------------------------------------------------------------------------------
     # comments
@@ -75,22 +102,22 @@ def gram0(mach):
     #------------------------------------------------------------------------------------------------------------------
     # ppnumber
 
-    WS [0-9]       (acc srcCh) (src+) PPN_1
-    WS '.' [0-9]   (acc '.') (acc srcCh) (src+) PPN_1
-    PPN_1 ppn1Nep  (acc srcCh) (src+) PPN_1
-    PPN_1 ppnEp    (acc srcCh) (src+) PPN_EP
+    WS [0-9]       (acc *src) (src+) PPN_1
+    WS '.' [0-9]   (acc '.') (acc *src) (src+) PPN_1
+    PPN_1 ppn1Nep  (acc *src) (src+) PPN_1
+    PPN_1 ppnEp    (acc *src) (src+) PPN_EP
     PPN_1          PPN_FIN
-    PPN_EP ppnEp1  (acc srcCh) (src+) PPN_1
+    PPN_EP ppnEp1  (acc *src) (src+) PPN_1
     PPN_EP         PPN_FIN
     PPN_FIN        (= accTyp AccTyp._0) (= tokTyp TokTyp.Ppn) (tokAddAcc) START
 
     #------------------------------------------------------------------------------------------------------------------
     # identifier
 
-    WS id0            (acc srcCh) (src+) IDEN
+    WS id0            (acc *src) (src+) IDEN
     WS bs             IDEN_BS_0
 
-    IDEN id1          (acc srcCh) (src+) IDEN
+    IDEN id1          (acc *src) (src+) IDEN
     IDEN bs           IDEN_BS_0
     IDEN              IDEN_FIN (= accTyp AccTyp._0) (= tokTyp TokTyp.Iden) (tokAddAcc) START
 
@@ -102,33 +129,33 @@ def gram0(mach):
     IDEN_BSU [A-F]    (= tmpV 'A') IDEN_BSU_NEXT
     IDEN_BSU [a-f]    (= tmpV 'a') IDEN_BSU_NEXT
     IDEN_BSU          IDEN_BS_ERR
-    IDEN_BSU_NEXT     (*= tmpU 16) (+= tmpU srcCh) (-= tmpU tmpV) (src+) \
+    IDEN_BSU_NEXT     (*= tmpU 16) (+= tmpU *src) (-= tmpU tmpV) (src+) \
                       (-= bsuI 1) (if (== 0 bsuI) IDEN_BSU_FIN) IDEN_BSU
     IDEN_BSU_FIN      (acc tmpU) IDEN
 
-    WS '"'            (= accTyp AccTyp._0) (= tokTyp TokTyp.Sl) (= quoteCh srcCh) (src+) QUOT
-    WS 'u8"'          (= accTyp AccTyp.u8) (= tokTyp TokTyp.Sl) (= quoteCh srcCh) (src+) QUOT
-    WS 'u"'           (= accTyp AccTyp.u)  (= tokTyp TokTyp.Sl) (= quoteCh srcCh) (src+) QUOT
-    WS 'U"'           (= accTyp AccTyp.U)  (= tokTyp TokTyp.Sl) (= quoteCh srcCh) (src+) QUOT
-    WS 'L"'           (= accTyp AccTyp.L)  (= tokTyp TokTyp.Sl) (= quoteCh srcCh) (src+) QUOT
-    WS "'"            (= accTyp AccTyp._0) (= tokTyp TokTyp.Cc) (= quoteCh srcCh) (src+) QUOT
-    WS "L'"           (= accTyp AccTyp.L)  (= tokTyp TokTyp.Cc) (= quoteCh srcCh) (src+) QUOT
-    WS "u'"           (= accTyp AccTyp.u)  (= tokTyp TokTyp.Cc) (= quoteCh srcCh) (src+) QUOT
-    WS "U'"           (= accTyp AccTyp.U)  (= tokTyp TokTyp.Cc) (= quoteCh srcCh) (src+) QUOT
+    WS '"'            (= accTyp AccTyp._0) (= tokTyp TokTyp.Sl) (= quoteCh *src) (src+) QUOT
+    WS 'u8"'          (= accTyp AccTyp.u8) (= tokTyp TokTyp.Sl) (= quoteCh *src) (src+) QUOT
+    WS 'u"'           (= accTyp AccTyp.u)  (= tokTyp TokTyp.Sl) (= quoteCh *src) (src+) QUOT
+    WS 'U"'           (= accTyp AccTyp.U)  (= tokTyp TokTyp.Sl) (= quoteCh *src) (src+) QUOT
+    WS 'L"'           (= accTyp AccTyp.L)  (= tokTyp TokTyp.Sl) (= quoteCh *src) (src+) QUOT
+    WS "'"            (= accTyp AccTyp._0) (= tokTyp TokTyp.Cc) (= quoteCh *src) (src+) QUOT
+    WS "L'"           (= accTyp AccTyp.L)  (= tokTyp TokTyp.Cc) (= quoteCh *src) (src+) QUOT
+    WS "u'"           (= accTyp AccTyp.u)  (= tokTyp TokTyp.Cc) (= quoteCh *src) (src+) QUOT
+    WS "U'"           (= accTyp AccTyp.U)  (= tokTyp TokTyp.Cc) (= quoteCh *src) (src+) QUOT
     WS 'u8'           (acc 'u8') (src+) IDEN
     
-    QUOT ['"]         (if (== quoteCh srcCh) QUOT_FIN) QUOT_ACC
+    QUOT ['"]         (if (== quoteCh *src) QUOT_FIN) QUOT_ACC
     QUOT bs           (= srcTmp0 src) QUOT_BS
-    QUOT *            QUOT_ACC (acc srcCh) (src+) QUOT
+    QUOT *            QUOT_ACC (acc *src) (src+) QUOT
     QUOT_FIN          (tokAddAcc) (src+) START
 
     (@ = condNemptyEn 0) QUOT (for eol eolV) (errPos src TokErr.QuotEol) (acc eol) (src+) (line+) QUOT
     QUOT nul !        (errPos src TokErr.QuotEof) (tokAddAcc) START
     
-    QUOT_BS '"'       (acc srcCh) (src+) QUOT
-    QUOT_BS "'"       (acc srcCh) (src+) QUOT
-    QUOT_BS '?'       (acc srcCh) (src+) QUOT
-    QUOT_BS bs        (acc srcCh) (src+) QUOT
+    QUOT_BS '"'       (acc *src) (src+) QUOT
+    QUOT_BS "'"       (acc *src) (src+) QUOT
+    QUOT_BS '?'       (acc *src) (src+) QUOT
+    QUOT_BS bs        (acc *src) (src+) QUOT
     QUOT_BS 'a'       (acc '\a') (src+) QUOT
     QUOT_BS 'b'       (acc '\b') (src+) QUOT
     QUOT_BS 't'       (acc '\t') (src+) QUOT
@@ -137,21 +164,21 @@ def gram0(mach):
     QUOT_BS 'f'       (acc '\f') (src+) QUOT
     QUOT_BS 'r'       (acc '\r') (src+) QUOT
     
-    QUOT_BS [0-7]     (= tmpU srcCh) (-= tmpU '0') (src+) QUOT_BSO1
-    QUOT_BSO1 [0-7]   (*= tmpU 8) (+= tmpU srcCh) (-= tmpU '0') (src+) QUOT_BSO2
+    QUOT_BS [0-7]     (= tmpU *src) (-= tmpU '0') (src+) QUOT_BSO1
+    QUOT_BSO1 [0-7]   (*= tmpU 8) (+= tmpU *src) (-= tmpU '0') (src+) QUOT_BSO2
     QUOT_BSO1         (acc tmpU) QUOT
-    QUOT_BSO2 [0-7]   (*= tmpU 8) (+= tmpU srcCh) (-= tmpU '0') (src+) (acc tmpU) QUOT
+    QUOT_BSO2 [0-7]   (*= tmpU 8) (+= tmpU *src) (-= tmpU '0') (src+) (acc tmpU) QUOT
     QUOT_BSO2         (acc tmpU) QUOT
 
-    QUOT_BS 'x' [0-9] (= tmpU srcCh) (-= tmpU '0') (src+) QUOT_BSX
-    QUOT_BS 'x' [A-F] (= tmpU srcCh) (-= tmpU 'A') (src+) QUOT_BSX
-    QUOT_BS 'x' [a-f] (= tmpU srcCh) (-= tmpU 'a') (src+) QUOT_BSX
+    QUOT_BS 'x' [0-9] (= tmpU *src) (-= tmpU '0') (src+) QUOT_BSX
+    QUOT_BS 'x' [A-F] (= tmpU *src) (-= tmpU 'A') (src+) QUOT_BSX
+    QUOT_BS 'x' [a-f] (= tmpU *src) (-= tmpU 'a') (src+) QUOT_BSX
     QUOT_BS 'x'       (errText srcTmp0 src TokErr.BsEscapeInvalid) (src<- srcTmp0) (acc bs) (src+) QUOT
     QUOT_BSX [0-9]    (= tmpV '0') QUOT_BSX_NEXT
     QUOT_BSX [A-F]    (= tmpV 'A') QUOT_BSX_NEXT
     QUOT_BSX [a-f]    (= tmpV 'a') QUOT_BSX_NEXT
     QUOT_BSX          (acc tmpU) QUOT
-    QUOT_BSX_NEXT     (*= tmpU 16) (+= tmpU srcCh) (-= tmpU tmpV) (src+) QUOT_BSX
+    QUOT_BSX_NEXT     (*= tmpU 16) (+= tmpU *src) (-= tmpU tmpV) (src+) QUOT_BSX
     
     QUOT_BS 'u'       (= bsuI 4) (= tmpU 0) (src+) QUOT_BSU
     QUOT_BS 'U'       (= bsuI 8) (= tmpU 0) (src+) QUOT_BSU
@@ -160,7 +187,7 @@ def gram0(mach):
     QUOT_BSU [A-F]    (= tmpV 'A') QUOT_BSU_NEXT
     QUOT_BSU [a-f]    (= tmpV 'a') QUOT_BSU_NEXT
     QUOT_BSU          QUOT_BS_ERR
-    QUOT_BSU_NEXT     (*= tmpU 16) (+= tmpU srcCh) (-= tmpU tmpV) (src+) \
+    QUOT_BSU_NEXT     (*= tmpU 16) (+= tmpU *src) (-= tmpU tmpV) (src+) \
                       (-= bsuI 1) (if (== 0 bsuI) QUOT_BSU_FIN) QUOT_BSU
     QUOT_BSU_FIN      (acc tmpU) QUOT
 

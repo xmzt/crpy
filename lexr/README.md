@@ -2,22 +2,22 @@
 
 Code generator for lexical analysis (parsing bytes / characters into tokens a la lex/flex).
 
-- Output code is generated from a state machine graph that is generated from the input grammar.
+- Output code is generated from a state machine graph that is generated from a grammar.
 
-- Output code generators for multiple languages. Currrently outputs python code only. C code
+- Output code generators for multiple languages. Currrently outputs Python code only. C code
   output is imminent. Moving beyond proof-of-concept, output of optimized machine-level code
   might be the next step.
 
-- Grammar is formed from a combo of python code and an application-specific interpreter using a
+- Grammar is formed from a combo of Python code and an application-specific interpreter using a
   lispish parenthesized prefix notation.
 
-### Primary goals
+Primary goals
 
 - Maximum efficiency / performance of output code.
 
-- Viewing a grammar should bring to mind phrases like 'compact' 'succinct' and 'minimally
-  redundant'. Current reference grammar to fully parse C language tokens (clexgen.py) is about
-  150 lines of meat plus 30 lines of python boilerplate.
+- Viewing a grammar should bring to mind phrases like "compact" "succinct" and "minimally
+  redundant". Current reference grammar to fully parse C language tokens (clexgen.py) is about
+  150 lines of meat plus 30 lines of Python boilerplate.
   
 - Graph is indepdendent of output language. Graph retains and deduces enough information for
   optimization at graph level (e.g. reduce redundant code paths, remove no-op nodes) down to
@@ -42,10 +42,10 @@ python clextest.py t0 t1 t2 t3 t4 t5
 
 ### Top-level grammar
 
-The grammar is just python code at the top-level (see clexmake.py). Header boilerplate code sets
+The grammar is just Python code at the top-level (see clexmake.py). Header boilerplate code sets
 up diagnostics for debugging, the initial graph is formed, the graph is compiled.
 
-One could generate the graph in straight python generating objects from funlib objlib nodelib,
+One could generate the graph in straight Python generating objects from funlib objlib nodelib,
 but the redundancy starts becoming overwhelming, hence the lispish interpreter
 (machlib.Mach.parse) to aid in generating the graph. The lispish syntax seems to provide for a
 textually compact grammar that follows the state machine closely, at least to the eyes of the
@@ -72,8 +72,8 @@ author.
 
 ### Compile-time and run-time environment
 
-After a grammar is formed in the state machine, machlib.Mach.compilFromGram will post-process
-the grammar, optimize, and generate output code.
+After an initial graph is formed, machlib.Mach.compilFromGram will post-process the grammar, optimize,
+and generate output code.
 
 The implicit run-time environment exposed to the grammar includes:
 
@@ -102,7 +102,7 @@ Some nodes are used only during compilation and are removed before output code g
 
 ### Objects
 
-int, float, single and double quoted strings are same as in python.
+int, float, single and double quoted strings are same as in Python.
 
 **[...]**
 
@@ -131,7 +131,7 @@ Last value of input read (by a NodeCond)
 
 **(\@ arg arg...)**
 
-Like python 'exec'. The arguments following \@ are evaulated compile-time, the result is
+Like Python 'exec'. The arguments following \@ are evaulated compile-time, the result is
 ignored, no node is generated, chain processing continues.
 
 **(= dst ... src)**
@@ -154,7 +154,7 @@ run-time semantics as `=`.
 
 **(list ...)**
 
-Create a python data list of subsequent arguments.
+Create a Python data list of subsequent arguments.
 
 **(for dst srcV)**
 
@@ -171,7 +171,7 @@ Create a NodeIf. At run-time expr is evaluated, and if true, branches to the 'th
 
 **(line+)**
 
-Records position of 'src' + 'node.off' in list of line offsets for line.column diagnostics.
+Records position of 'src + node.off' in list of line offsets for line.column diagnostics.
 
 **(off=)**
 
@@ -190,7 +190,7 @@ Set 'to' pointer of prev node to 'to' pointer of node0. Used in backtracking.
 
 Set 'src' pointer to run-time variable sym. All preceding execution paths are searched for
 assignments to sym from 'src', and node.off is set to off of the node with the preceding
-assignments, if they are consistent. Used for backtracking.
+assignments, if they are consistent. Used in backtracking.
 
 **(src+)**
 
@@ -277,13 +277,13 @@ Parse trigraphs in C for completeness bragging rights even though they are an ex
 
 ## Opinion section
 
-My instinct is to utilize functionality of the python interpreter directly, rather than write
+My instinct is to utilize functionality of the Python interpreter directly, rather than write
 more code implementing a custom interpreter, but I found the resulting grammars in straight
-python overly verbose and cluttered with punctuation. Memories of perl.
+Python overly verbose and cluttered with punctuation. Memories of perl.
 
-One idea was to use python's ast parser for expressions and translate that into different output
+One idea was to use Python's ast parser for expressions and translate that into different output
 targets, rather than write my own parser / ast. However, the node graph system would still be
-outside this and I would need to deal with python discouraging multiple statements per line, or
+outside this and I would need to deal with Python discouraging multiple statements per line, or
 suffer a grammar that is 600 lines long and 18 columns wide. Both of these issues would require
 significant amounts of ugly, clunky code.
 
@@ -302,20 +302,20 @@ beyond developing on 80x25 text terminals.
 
 ## Files
 
-clexmake.py: specific parser generator for C code
-clex_gen.py: generated code for C parser
-clex.py: C parser top-level
-clextest.py: test suite for clex.py (todo check output against known values)
+- clexmake.py: specific parser generator for C code
+- clex_gen.py: generated code for C parser
+- clex.py: C parser top-level
+- clextest.py: test suite for clex.py (todo check output against known values)
 
-machlib: main 'machine' structure to manage generating the parser
-objlib: base objects / ast elements used to parse and process grammar
-funlib.py: objects / ast elements for basic functions (e.g. arithmetic)
-actlib.py: objects / ast elements for compile-time actions
-nodelib.py: nodes and transisitions for state machine graph
-codepylib.py: python output code generation
-scanlib.py: lexical scanner for lispy expressions
-logclib.py: diagnostic logging helpers for debugging
-util.py: helper functions, stateless stuff
-cbase.py: enums and such for C language that may be used by both grammar and generated python output code
-chtab.py: character lookup tables and character sets 
-other.py: scrapyard of abandoned code that I want to keep around
+- machlib: main 'machine' structure to manage generating the parser
+- objlib: base objects / ast elements used to parse and process grammar
+- funlib.py: objects / ast elements for basic functions (e.g. arithmetic)
+- actlib.py: objects / ast elements for compile-time actions
+- nodelib.py: nodes and transisitions for state machine graph
+- codepylib.py: Python output code generation
+- scanlib.py: lexical scanner for lispy expressions
+- logclib.py: diagnostic logging helpers for debugging
+- util.py: helper functions, stateless stuff
+- cbase.py: enums and such for C language that may be used by both grammar and generated Python output code
+- chtab.py: character lookup tables and character sets 
+- other.py: scrapyard of abandoned code that I want to keep around

@@ -10,6 +10,9 @@ srcTest = types.SimpleNamespace()
 srcTest.t0 = r'''
 01e-4
 6 8[a]
+auto
+ _Thread_local
+  unionbuster
 '''
 
 srcTest.t1 = r'''

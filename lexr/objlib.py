@@ -19,6 +19,7 @@ import sys
 
 Spec = enulib.EnuBitmap.create('Spec').addV('Ld St'.split())
 
+class ArgNException(Exception): pass #(obj)
 class LdNexistException(Exception): pass
 class StNvalidException(Exception): pass
 
@@ -69,8 +70,10 @@ class ObjBase:
     def asObj(self):
         return self
 
+    #def asDtypS(self)
     #def asInt(self)
     #def asList(self)
+    #def asSymS(self)
 
     def chainToTopTran(self, tran): pass
 
@@ -83,6 +86,8 @@ class ObjBase:
     def desTypSrc(self):
         return f'<{self.__class__.__name__} {self.diag.srcPos()} {self.diag.srcText()}>{self.des0()}'
 
+    __repr__ = desTypSrc
+    
     def dtyp(self):
         return None
     
@@ -101,8 +106,8 @@ class ObjBase:
     
     eva = eva_Ld
 
-    __repr__ = desTypSrc
-    
+    def offPropObj(self, off): pass
+
     def parseObjGo(self):
         self.mach.parseObjAcc(self)
 
@@ -189,7 +194,7 @@ class CallFunObj(ObjBase):
         super().__init__(mach, diag)
         self.con = con
 
-    @g_logc.evaObjLst
+    @g_logc.evaLst
     def evaLst(self, spec, lst):
         return self.con(self.mach, lst.diag, lst.argV)
     
@@ -229,6 +234,21 @@ class ChsetObj(ObjBase):
         return self
 
 #======================================================================================================================
+# Dtyp
+#======================================================================================================================
+
+class DtypObj(ObjBase):
+    def __init__(self, mach, diag, dtypS):
+        super().__init__(mach, diag)
+        self.dtypS = dtypS
+
+    def asDtypS(self):
+        return self.dtypS
+
+    def des0(self):
+        return self.dtypS
+
+#======================================================================================================================
 # Eol
 #======================================================================================================================
 
@@ -265,7 +285,7 @@ class ForeignObj(ObjBase):
         exec(f'self.val{op}b')
         return self
 
-    @g_logc.evaObjLst
+    @g_logc.evaLst
     def evaLst(self, spec, lst):
         argV = [arg.eva(Spec.Ld) for arg in lst.argV[1:]]
         x = self.val(*argV)
@@ -346,10 +366,18 @@ class LstObj(ObjBase):
 #======================================================================================================================
 
 class VoidObj(ObjBase):
+    def asDtypS(self):
+        return None
+    
     @g_logc.chainObj
     def chain(self, chainV, chainI, prev):
         chainV[chainI].chain(chainV, chainI+1, prev)
-
+        
+class VoidNoneObj(ObjBase):
+    @g_logc.evaLookup
+    def evaLookup(self, spec, segV, diag):
+        return RunDotObj(self.mach, diag, self.mach.voidObj, segV) if segV else self.mach.voidObj
+        
 #======================================================================================================================
 # Sym
 #======================================================================================================================
@@ -360,6 +388,9 @@ class SymObj(ObjBase):
         self.root = root
         self.attr = attr
         self.bare = bare
+
+    def asSymS(self):
+        return self.bare
 
     @g_logc.chainObj
     def chain(self, chainV, chainI, prev):
@@ -405,6 +436,10 @@ class RunCallObj(ObjBase):
     def des0(self):
         return util.desCall(self.argV)
 
+    def offPropObj(self, off):
+        for arg in self.argV:
+            arg.offPropObj(off)
+
     @g_logc.unredunKey
     def unredunKey(self):
         return tuple([arg.unredunKey() for arg in self.argV])
@@ -420,6 +455,9 @@ class RunDotObj(RunObjBase):
 
     def des0(self):
         return '.'.join([self.root.des0()] + self.segV)
+
+    def offPropObj(self, off):
+        self.root.offPropObj(off)
 
     @g_logc.unredunKey
     def unredunKey(self):
@@ -447,6 +485,7 @@ class RunSymObj(RunObjBase):
         except:
             return None
     
+    @g_logc.evaLookup
     def evaLookup(self, spec, segV, diag):
         return RunDotObj(self.mach, diag, self, segV) if segV else self
 
@@ -457,6 +496,55 @@ class RunSymObj(RunObjBase):
     def unredunKey(self):
         return (self.bare,)
     
+class RunSymFactoryObj(ObjBase):
+    InstanceClas = RunSymObj
+
+    @g_logc.evaLst
+    def evaLst(self, spec, lst):
+        if 2 > len(lst.argV):
+            raise ArgNException(self)
+        sym = lst.argV[1].eva(Spec.St)
+        dtyp = None
+        dtypArgV = None
+        if 2 < len(lst.argV):
+            dtyp = lst.argV[2].eva(Spec.Ld).asDtypS()
+            if 3 < len(lst.argV):
+                dtypArgV = [arg.eva(Spec.Ld).asDtypS() for arg in lst.argV[3:]]
+        obj = self.InstanceClas(self.mach, lst.diag, sym.asSymS(), dtyp, dtypArgV)
+        sym.evaAssign(obj)
+        return obj
+
 class RunMemSymObj(RunSymObj):
     def codePy(self, coder):
         return f'self.{self.bare}'
+
+class RunMemSymFactoryObj(RunSymFactoryObj):
+    InstanceClas = RunMemSymObj
+
+class RunSrcDerefObj(RunObjBase):
+    def __init__(self, mach, diag):
+        super().__init__(mach, diag)
+        self.off = None
+        
+    def codePy(self, coder):
+        return f'self.srcA[self.src+{self.off}]'
+
+    def des0(self):
+        return f'(*src off={self.off})'
+
+    def dtyp(self):
+        return 'str'
+        
+    def offPropObj(self, off):
+        self.off = off - 1
+
+    @g_logc.unredunKey
+    def unredunKey(self):
+        return ('*src',)
+
+class RunSrcDerefFactoryObj(ObjBase):
+    @g_logc.evaLookup
+    def evaLookup(self, spec, segV, diag):
+        obj = RunSrcDerefObj(self.mach, diag)
+        return RunDotObj(self.mach, diag, obj, segV) if segV else obj
+

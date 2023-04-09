@@ -37,6 +37,7 @@ def scopePop0(scope, mach):
     def set(k, f, *args): setattr(scope, k, f(mach, mach.diag0, *args))
     
     # basic
+    set('None', objlib.VoidNoneObj)
     set('@', funlib.VoidRetFunObj)
     set('=', funlib.AssignFunObj, '=')
     for x in '+ - * / | & ^ << >> < <= == != >= >'.split():
@@ -44,11 +45,18 @@ def scopePop0(scope, mach):
     for x in '+= -= *= /= |= &= ^= <<= >>='.split():
         set(x, funlib.BinopAssignFunObj, x)
     set('list', funlib.ListFunObj)
+    
+    set('sym', objlib.RunSymFactoryObj)
+    set('mem', objlib.RunMemSymFactoryObj)
 
+    set('int', objlib.DtypObj, 'int')
+    set('srcPtr', objlib.DtypObj, 'srcPtr')
+    set('str', objlib.DtypObj, 'str')
+    
     obj = getattr(scope, '*')
     obj.chain = actlib.TranOff1SymObj.chain.__get__(obj, obj.__class__)
-    setattr(scope, '!', actlib.TranOff0SymObj(mach, mach.diag0))
-    setattr(scope, '?', actlib.QmSymObj(mach, mach.diag0))
+    set('!', actlib.TranOff0SymObj)
+    set('?', actlib.QmSymObj)
     
     def setAct(k, f): setattr(scope, k, objlib.CallFunObj(mach, mach.diag0, f))
     
@@ -64,39 +72,10 @@ def scopePop0(scope, mach):
     setAct('src+', actlib.SrcIncActObj)
     setAct('src+from', actlib.SrcIncFromActObj)
     setAct('term', actlib.TermActObj)
-
+    
     # standard
     set('src', objlib.RunMemSymObj, 'src', 'srcPtr', None)
-    set('srcCh', objlib.RunMemSymObj, 'srcCh', 'str', None)
-
-    # ext sym
-    set('AccTyp', objlib.RunSymObj, 'AccTyp', None, None)
-    set('TokErr', objlib.RunSymObj, 'TokErr', None, None)
-    set('TokTyp', objlib.RunSymObj, 'TokTyp', None, None)
-    set('Ws', objlib.RunSymObj, 'Ws', None, None)
-    
-    # mem token
-    set('accTyp', objlib.RunMemSymObj, 'accTyp', None, None)
-    set('tokSrc', objlib.RunMemSymObj, 'tokSrc', 'srcPtr', None)
-    set('tokTyp', objlib.RunMemSymObj, 'tokTyp', None, None)
-    set('tokWs', objlib.RunMemSymObj, 'tokWs', None, None)
-
-    # mem temp
-    set('bsuI', objlib.RunMemSymObj, 'bsuI', 'int', None)
-    set('quoteCh', objlib.RunMemSymObj, 'quoteCh', 'str', None)
-    set('srcTmp0', objlib.RunMemSymObj, 'srcTmp0', 'srcPtr', None)
-    set('tmpU', objlib.RunMemSymObj, 'tmpU', 'int', None)
-    set('tmpV', objlib.RunMemSymObj, 'tmpV', 'int', None)
-
-    # meth
-    set('acc', objlib.RunMemSymObj, 'acc', None, [None, 'str'])
-    set('errPos', objlib.RunMemSymObj, 'errPos', None, None)
-    set('errText', objlib.RunMemSymObj, 'errText', None, None)
-    #set('linePopGt', objlib.RunMemSymObj, 'linePopGt', None, None)
-    set('tokAdd', objlib.RunMemSymObj, 'tokAdd', None, None)
-    set('tokAddAcc', objlib.RunMemSymObj, 'tokAddAcc', None, None)
-
-    #todo eval exec sym mem meth
+    set('*src', objlib.RunSrcDerefFactoryObj)
 
 AsObjTab = {
     float: objlib.FloatLitObj,

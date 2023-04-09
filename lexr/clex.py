@@ -31,7 +31,7 @@ class Logc:
 
     def tokAddAcc__1(self, p):
         return self.logr(f'[tok] <{p.tokSrc} {p.linePosS(p.tokSrc)}> [{p.tokWs}] {p.tokTyp}'
-                         f' {p.accTyp} {"".join(p.accV)!r}')
+                         f' {p.accTyp} {p.accS!r}')
     
 #======================================================================================================================
 # Parser
@@ -41,6 +41,7 @@ class Parser:
     def __init__(self):
         # not in grammar directly
         self.accV = []
+        self.accS = None
         self.lineSrcIV = [0]
 
         # in grammar and used by caller
@@ -92,5 +93,8 @@ class Parser:
         self.accV = []
 
     def tokAddAcc(self):
-        g_logc.tokAddAcc(self)
+        self.accS = ''.join(self.accV)
         self.accV = []
+        if cbase.TokTyp.Iden == self.tokTyp:
+            self.tokTyp = cbase.TokTypByKeyword.get(self.accS, self.tokTyp)
+        g_logc.tokAddAcc(self)

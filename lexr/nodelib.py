@@ -432,6 +432,9 @@ class NodeIf(NodeCodeMix, NodeToNset):
         self.tranTo.offSet(self.offFwd)
         self.tranThen.offSet(self.offFwd)
 
+    def offPropModFwd(self):
+        self.exprObj.offPropObj(self.off)
+
     @g_logc.unredunKey
     def unredunKey(self):
         return (self.tranTo.to.uniq, 'If', self.exprObj.unredunKey(), self.tranThen.to.uniq)
@@ -473,7 +476,10 @@ class NodeToCall(NodeCodeMix, NodeToNset):
         return f'{self.des0()} [{self.off}] <{self.__class__.__name__}> {util.des0(self.callObj)}'
 
     offMultiOk = NodeTo.offMultiOk_1
-    
+
+    def offPropModFwd(self):
+        self.callObj.offPropObj(self.off)
+
     def offSearchSrcAssignMatchP(self, searchr):
         return self.callObj.srcAssignSearchMatchP(searchr.target)
 
