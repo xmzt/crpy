@@ -31,15 +31,14 @@ class StopOffNready(Exception): pass
 class OffSearchSrcAssignNdeterminedException(Exception): pass #(searchr)
 class OffSearchSrcAssignConflictException(Exception): pass #(searchr, node)
 
+class OptssaSearchFailException(Exception): pass #(item0)
+
 class TranChainToAlreadyException(Exception): #(tran,to)
     def __str__(self):
         return f'\ntran={util.desTyp(self.args[0])}\nto={util.desTyp(self.args[1])}\n'
 
 class TranVerifyException(Exception): pass #(tran)
 class TranVerifyToException(Exception): pass #(tran, to)
-
-#class TranToNsetException(Exception): pass
-#class TranKeyTranInvalidException(Exception): pass
 
 #======================================================================================================================
 # helpers
@@ -60,6 +59,50 @@ def reduceTranPrioDump(a, b): return a if a.prioDump() <= b.prioDump() else b
 def dumpOff(tran, offExpect):
     return '' if offExpect == tran.off else f'[off={tran.off}]'
 
+def reduceOptssaGroupUniq(a, b): return max(a, b.node.optssaGroupUniqI)
+
+class OptssaItem:
+    def __init__(self, iden, spec, node):
+        self.iden = iden
+        self.spec = spec
+        self.node = node
+        self.group = None
+
+    def des0(self):
+        return f'({self.iden!r},{self.spec!r},{util.des0(self.node)})'
+        
+    __repr__ = des0
+
+    def nodeReg(self):
+        self.node.optssaItemDset[self.iden] = self
+        
+class OptssaGroup:
+    def __init__(self, item0):
+        self.item0 = item0
+        self.itemV = []
+        self.uniqI = None
+        
+    def absorb(self, group):
+        for item in group.itemV:
+            item.group = self
+        self.itemV += group.itemV
+
+    def finalize(self):
+        inuseDset = {}
+        for item in self.itemV:
+            for nodeItem in item.node.optssaItemDset.values():
+                if None is not (group := nodeItem.group):
+                    inuseDset[group.uniqI] = None
+        i = 0
+        while i in inuseDset:
+            i += 1
+        self.uniqI = i
+        g_logc.optssaGroupFinalize(self)
+
+    def itemAdd(self, item):
+        item.group = self
+        self.itemV.append(item)
+
 #======================================================================================================================
 # NodeBase
 #======================================================================================================================
@@ -68,10 +111,12 @@ class NodeBase(objlib.ObjBase):
     def __init__(self, mach, diag):
         super().__init__(mach, diag)
         self.froTranV = []
+        self.mark = None
         self.mach.nodeUniqI += 1
         self.uniq = self.mach.nodeUniqI
-        self.mark = None
-
+        self.optssaItemDset = {}
+        self.optssaGroupUniqI = 0
+        
     def asNode(self):
         return self
 
@@ -105,37 +150,21 @@ class NodeBase(objlib.ObjBase):
         loopD[id(self)] = self
         return functools.reduce(reduceTranPrioIden, self.froTranV, froTranFavNone).idenAB(loopD)
 
-    def replace(self, repl):
-        self.removeFwd()
-        for tran in (froTranV := self.froTranV):
-            tran.to = repl
-            repl.froTranAppend(tran)
-        self.froTranV = []
-        return froTranV
-    
+    def offSet(self, off): pass
+
+    def optssaInit(self): pass
+
     def unredunKey0(self):
         return (self.uniq,)
 
-    def verify(self):
-        if self.mark != self.mach.mark:
-            self.mark = self.mach.mark
-            self.mach.verifyN += 1
-            self.verify1()
-            
-#======================================================================================================================
-# NodeNset
-
-class NodeNset(NodeBase):
-    def froTranAppend(self, tran):
-        super().froTranAppend(tran)
-        
-    def froTranRemove(self, tran):
-        super().froTranRemove(tran)
-
-    def idenAB(self, loopD): return '<Nset>',0
-
-    def offSet(self, off): pass
-
+    def unredunReplace(self, repl):
+        self.removeFwd()
+        for tran in self.froTranV:
+            tran.to = repl
+            repl.froTranAppend(tran)
+            tran.unredunRegFro()
+        self.froTranV = []
+    
     def verify(self): pass
     
 #======================================================================================================================
@@ -150,14 +179,16 @@ class NodeCodeMix:
     def codePyLut(self, logr): pass
 
 #======================================================================================================================
-# NodeTerm
+# NodeNset: singleton mach.nodeNset, placeholder to use for unset tran.to
+
+class NodeNset(NodeBase):
+    def idenAB(self, loopD): return '<Nset>',0
+
+#======================================================================================================================
+# NodeTerm: singleton mach.nodeTerm
 
 class NodeTerm(NodeBase):
     def idenAB(self, loopD): return '<Term>',0
-
-    def offSet(self, off): pass
-
-    def verify(self): pass
 
 #======================================================================================================================
 # NodeTo: abstract
@@ -198,15 +229,14 @@ class NodeTo(NodeBase):
     def dumpNodeTreeHead(self, logr, pre):
         with logr(f'{pre}{self.desDumpNodeTree()}'):
             if g_logc.dumpNodeTreeFro:
-                logr(f'froTranV: {" ".join([tran.desFro() for tran in self.froTranV])}')
+                with logr(f'froTranV:'):
+                    for tran in self.froTranV:
+                        logr(f'{util.des0(tran)}')
     
     def dumpNodeTreeFull(self, logr, pre, ind):
         self.dumpNodeTreeHead(logr, pre)
         with logr if ind else loglib.logNoop:
             self.tranTo.to.dumpNodeTree(logr, dumpOff(self.tranTo, 0), 0, self.tranTo)
-
-    def removeFwd(self):
-        self.tranTo.to.froTranRemove(self.tranTo)
 
     def offSearchSrcAssign(self, target):
         searchr = OffSearchSrcAssignr(self, target)
@@ -277,6 +307,47 @@ class NodeTo(NodeBase):
                 g_logc.offSet(self)
                 self.mach.offPropDset[id(self)] = self
 
+    def optssaSearch0(self, item0):
+        with g_logc.optssaSearch0(self, item0):
+            if None is item0.group:
+                group = OptssaGroup(item0)
+                group.itemAdd(item0)
+                self.mach.optssaGroupDset[id(group)] = group
+                self.optssaSearchFro(item0)
+
+    def optssaSearch1(self, item0):
+        if self is item0.node:
+            raise OptssaSearchFailException(item0)
+        if None is (item := self.optssaItemDset.get(item0.iden)):
+            item = OptssaItem(item0.iden, objlib.Spec._0, self)
+            item.nodeReg()
+            item0.group.itemAdd(item)
+            g_logc.optssaSearch1(self, item)
+            self.optssaSearchFro(item0)
+        elif item.group is not item0.group:
+            if None is not item.group:
+                del self.mach.optssaGroupDset[id(item.group)]
+                item0.group.absorb(item.group)
+                g_logc.optssaSearch1(self, item)
+            else:
+                item0.group.itemAdd(item)
+                g_logc.optssaSearch1(self, item)
+                if objlib.Spec.Ld & item.spec:
+                    self.optssaSearchFro(item0)
+        
+    def optssaSearchFro(self, item):
+        for tran in self.froTranV:
+            tran.optssaSearchFro(item)
+    
+    def removeFwd(self):
+        self.tranTo.to.froTranRemove(self.tranTo)
+
+    def verify(self):
+        if self.mark != self.mach.mark:
+            self.mark = self.mach.mark
+            self.mach.verifyN += 1
+            self.verify1()
+            
     def verify1(self):
         for tran in self.froTranV:
             if tran.to is not self:
@@ -284,9 +355,9 @@ class NodeTo(NodeBase):
         self.tranTo.verify()
 
 #======================================================================================================================
-# NodeToNset
+# NodeToNset: abstract for NodeTo that dont have a preset tranTo (i.e. all but NodeToTerm)
 
-class NodeToNset(NodeTo):
+class NodeToNset(NodeTo): 
     def __init__(self, mach, diag):
         super().__init__(mach, diag)
         self.tranTo = TranToFroNset(mach, diag, mach.nodeNset, self, None, 0).reg()
@@ -316,7 +387,8 @@ class NodeCond(NodeCodeMix, NodeToNset):
         super().__init__(mach, diag)
         self.condNemptyEn = self.mach.scope.condNemptyEn
         self.tranByKeyD = {}
-
+        self.srcChOptssaItem = None
+        
     def __getattr__(self, name):
         if None is not (ch := chtab.nameChD.get(name)):
             if ch in self.tranByKeyD:
@@ -334,9 +406,10 @@ class NodeCond(NodeCodeMix, NodeToNset):
         
     def codePyFun(self, logr):
         with logr(f'def f{self.uniq}(self): #{self.iden()}'):
-            logr(f'self.srcCh=self.srcA[self.src+{self.off}]')
-            logr(f'g_logc.ch(self, {self.off}, self.srcCh)')
-            logr(f'return Lut{self.uniq}.get(self.srcCh, f{self.tranTo.to.uniq}) #{self.tranTo.to.iden()}')
+            pre = '' if None is (group := self.srcChOptssaItem.group) else f'self.srcCh{group.uniqI}='
+            logr(f'{pre}ch=self.srcA[self.src+{self.off}]')
+            logr(f'g_logc.ch(self, {self.off}, ch)')
+            logr(f'return Lut{self.uniq}.get(ch, f{self.tranTo.to.uniq}) #{self.tranTo.to.iden()}')
 
     def codePyLut(self, logr):
         with logr(f'Lut{self.uniq} = {{ #{self.iden()}'):
@@ -379,6 +452,10 @@ class NodeCond(NodeCodeMix, NodeToNset):
         for tran in self.tranByKeyD.values():
             tran.offSet(self.offFwd)
 
+    def optssaInit(self):
+        self.srcChOptssaItem = OptssaItem(('srcCh', self.off), objlib.Spec.St, self)
+        self.srcChOptssaItem.nodeReg()
+
     @g_logc.unredunKey
     def unredunKey(self):
         v = [self.tranTo.to.uniq]
@@ -387,7 +464,7 @@ class NodeCond(NodeCodeMix, NodeToNset):
             for tran in self.tranByKeyD.values():
                 v += (tran.key, tran.to.uniq)
         return tuple(v)
-            
+
     def verify1(self):
         if OffMulti == self.off and self.tranByKeyD:
             self.mach.errN += 1
@@ -434,6 +511,9 @@ class NodeIf(NodeCodeMix, NodeToNset):
 
     def offPropModFwd(self):
         self.exprObj.offPropObj(self.off)
+
+    def optssaInit(self):
+        self.exprObj.optssaInitObj(self)
 
     @g_logc.unredunKey
     def unredunKey(self):
@@ -482,6 +562,9 @@ class NodeToCall(NodeCodeMix, NodeToNset):
 
     def offSearchSrcAssignMatchP(self, searchr):
         return self.callObj.srcAssignSearchMatchP(searchr.target)
+
+    def optssaInit(self):
+        self.callObj.optssaInitObj(self)
 
     @g_logc.unredunKey
     def unredunKey(self):
@@ -566,37 +649,23 @@ class NodeToSrcIncFrom(NodeToSrcIncBase):
 #======================================================================================================================
 
 class ChainHeadObj(objlib.ObjBase):
-    def chainTo(self, to):
-        pass
+    def chainTo(self, to): pass
 
     def chainToTopTran(self, tran):
         self.mach.topTranDset[id(tran)] = tran
 
 class ChainTermObj(objlib.ObjBase):
     @g_logc.chainObj
-    def chain(self, chainV, chainI, prev):
-        pass
+    def chain(self, chainV, chainI, prev): pass
 
-class ChainTermInsertObj(ChainTermObj):
-    def __init__(self, mach, diag, prev0, head):
+class ChainTermInsertObj(objlib.ObjBase):
+    def __init__(self, mach, diag):
         super().__init__(mach, diag)
-        self.prev0 = prev0
-        self.head = head
         self.prevV = []
-        mach.insertObjV.append(self)
     
     @g_logc.chainObj
     def chain(self, chainV, chainI, prev):
         self.prevV.append(prev)
-
-    def insertGo(self):
-        with g_logc.insertGo(self):
-            tail = self.prev0.to
-            self.prev0.replaceTo(self.head)
-            for prev in self.prevV:
-                tran = prev.chainTo(tail)
-                # copy prio1 for dumpNodeTree
-                tran.prio1 = self.prev0.prio1
 
 #======================================================================================================================
 # Tran 
@@ -641,6 +710,8 @@ class TranToBase(objlib.ObjBase): #abstract
         return False
 
     def offSearchSrcAssignFro(self, searchr): pass
+
+    def optssaSearchFro(self, item): pass
 
     def prioDump(self):
         return (1, self.prio1)
@@ -735,6 +806,9 @@ class TranToFro(TranToBase):
 
     def offSet(self, offFwd):
         self.to.offSet(offFwd if 0 > offFwd else offFwd + self.off)
+
+    def optssaSearchFro(self, item):
+        self.fro.optssaSearch1(item)
 
     def unredunRegFro(self):
         self.mach.unredunReg(self.fro)

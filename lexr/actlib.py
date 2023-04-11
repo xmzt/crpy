@@ -48,8 +48,17 @@ class InsertActObj(objlib.CallObjBase):
     def chain(self, chainV, chainI, prev):
         if 1 != len(self.argV):
             raise objlib.ArgNException(self)
-        x = chainV[-1] = nodelib.ChainTermInsertObj(self.mach, self.diag, prev, nodelib.NodeCond(self.mach, self.diag))
-        chainV[chainI].chain(chainV, chainI+1, x.head)
+        # create head node and chain to that
+        head = nodelib.NodeCond(self.mach, self.diag)
+        chainV[-1] = nodelib.ChainTermInsertObj(self.mach, self.diag)
+        chainV[chainI].chain(chainV, chainI+1, head)
+
+        tail = prev.to
+        prev.replaceTo(head)
+        for termPrev in chainV[-1].prevV:
+            tran = termPrev.chainTo(tail)
+            # copy prio1 for dumpNodeTree
+            tran.prio1 = prev.prio1
 
 #------------------------------------------------------------------------------------------------------------------------
 # LineIncActObj

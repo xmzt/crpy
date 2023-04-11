@@ -125,6 +125,8 @@ class ObjBase:
         coder = codepylib.Coder()
         return coder.execExecText(self.codePy(coder))
 
+    def optssaInitObj(self, node): pass
+
     def runP(self):
         return False
 
@@ -440,6 +442,10 @@ class RunCallObj(ObjBase):
         for arg in self.argV:
             arg.offPropObj(off)
 
+    def optssaInitObj(self, node):
+        for arg in self.argV:
+            arg.optssaInitObj(node)
+
     @g_logc.unredunKey
     def unredunKey(self):
         return tuple([arg.unredunKey() for arg in self.argV])
@@ -458,6 +464,9 @@ class RunDotObj(RunObjBase):
 
     def offPropObj(self, off):
         self.root.offPropObj(off)
+
+    def optssaInitObj(self, node):
+        self.root.optssaInitObj(node)
 
     @g_logc.unredunKey
     def unredunKey(self):
@@ -525,9 +534,10 @@ class RunSrcDerefObj(RunObjBase):
     def __init__(self, mach, diag):
         super().__init__(mach, diag)
         self.off = None
+        self.optssaItem = None
         
     def codePy(self, coder):
-        return f'self.srcA[self.src+{self.off}]'
+        return f'self.srcCh{self.optssaItem.group.uniqI}'
 
     def des0(self):
         return f'(*src off={self.off})'
@@ -538,6 +548,11 @@ class RunSrcDerefObj(RunObjBase):
     def offPropObj(self, off):
         self.off = off - 1
 
+    def optssaInitObj(self, node):
+        item = self.optssaItem = nodelib.OptssaItem(('srcCh', self.off), Spec.Ld, node)
+        item.nodeReg()
+        self.mach.optssaItemLdV.append(item)
+        
     @g_logc.unredunKey
     def unredunKey(self):
         return ('*src',)

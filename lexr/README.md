@@ -4,9 +4,10 @@ Code generator for lexical analysis (parsing bytes / characters into tokens a la
 
 - Output code is generated from a state machine graph that is generated from a grammar.
 
-- Output code generators for multiple languages. Currrently outputs Python code only. C code
-  output is imminent. Moving beyond proof-of-concept, output of optimized machine-level code
-  might be the next step.
+- Output code in Python only currently. C code output imminent. Moving beyond proof-of-concept,
+  output of optimized machine-level code might be the next step.
+
+- Optimizations to reduce redundancy, minimize output code size and variable usage.
 
 - Grammar is formed from a combo of Python code and an application-specific interpreter using a
   lispish parenthesized prefix notation.
@@ -46,7 +47,7 @@ The grammar is just Python code at the top-level (see clexmake.py). Header boile
 up diagnostics for debugging, the initial graph is formed, the graph is compiled.
 
 One could generate the graph in straight Python generating objects from funlib objlib nodelib,
-but the redundancy starts becoming overwhelming, hence the lispish interpreter
+but the code becomes annoyingly redundant and punctation-heavy, hence the lispish interpreter
 (machlib.Mach.parse) to aid in generating the graph. The lispish syntax seems to provide for a
 textually compact grammar that follows the state machine closely, at least to the eyes of the
 author.
@@ -77,8 +78,8 @@ and generate output code.
 
 The implicit run-time environment exposed to the grammar includes:
 
-- src: pointer to current input
-- srcCh: value of input most recently read
+- src: pointer to current input.
+- *src: the character value at 'src', specifically the value tested by the preceding conditional at node.off-1.
 
 Each node has a compile-time property 'off' representing an offset from 'src' that this node is
 processing. For the most part 'node.off' is automatically deduced, but the grammar must
@@ -93,7 +94,7 @@ specifying an input character has off=1, and off=0 otherwise, but this can be mo
 
 Top-level graph node types:
 
-- NodeCond: read value of src[node.off] into srcCh. Dispatch-style branch based on srcCh, else follow 'to' pointer.
+- NodeCond: read value of src[node.off]. Dispatch-style branch based on value, else follow 'to' pointer.
 - NodeIf: Evaluates an expression. Branch if true else follow 'to' pointer.
 - NodeTo: Execute a run-time operation. No branching, always follow 'to' pointer.
 - NodeTerm: Stop parsing, only type of node with no 'to' pointer.
@@ -114,7 +115,7 @@ Previous transition off=0 e.g. to peek at the input but not consume it.
 
 **\*** 
 
-Previous transition off=1 e.g. to consume srcCh when following the 'to' pointer of a NodeCond
+Previous transition off=1 e.g. to consume src when following the 'to' pointer of a NodeCond
 when no other input matches.
 
 **\?**
@@ -125,9 +126,9 @@ Stop processing chain if transisition has already been set (normally this would 
 
 Pointer to current input
 
-**srcCh**
+**\*src**
 
-Last value of input read (by a NodeCond)
+Character value of 'src' tested by previous NodeCond 'cond' where 'cond.off == node.off-1'.
 
 **(\@ arg arg...)**
 
@@ -214,7 +215,7 @@ An example few lines of clexmake.py:
 ```
 START        (off= 0) (= tokWs Ws._0) WS
 WS [ \t\v\f] (|= tokWs Ws.H) (src+) WS
-WS *         (= tokSrc src) OTHER (acc srcCh) (= accTyp AccTyp._0) (= tokTyp TokTyp.Other) (tokAddAcc) (src+) START
+WS *         (= tokSrc src) OTHER (acc *src) (= accTyp AccTyp._0) (= tokTyp TokTyp.Other) (tokAddAcc) (src+) START
 ```
 
 Line 1: from START state, set tokWs to 0 and goto WS. Input not used. The (off= 0) sets the

@@ -111,11 +111,6 @@ class Logc(loglib.Logc, metaclass=loglib.LogcMeta):
                 return res
         return f1
 
-    def insertGo__1(self, obj):
-        with self.logr(f'[insertGo] {util.desTyp(obj)}'):
-            self.logr(f'prev0: {util.desTyp(obj.prev0)}')
-            return self.logr(f'head: {util.desTyp(obj.head)}')
-
     def offPropIter__1(self, propDset):
         return self.logr(f'[offPropIter] dsetN={len(propDset)}')
 
@@ -131,6 +126,19 @@ class Logc(loglib.Logc, metaclass=loglib.LogcMeta):
     def offSearchSrcAssignRes__1(self, searchr):
         return self.logr(f'[offSearchSrcAssignRes] off={searchr.off}')
     
+    def optssaGroupFinalize(self, group):
+        with self.logr(f'[optssaGroupUniq]'):
+            self.logr(f'uniqI: {group.uniqI}')
+            for item in group.itemV:
+                self.logr(f'{util.des0(item)}')
+            return self.logr
+    
+    def optssaSearch0__1(self, node, item):
+        return self.logr(f'[optssaSearch0] {util.des0(node)} {util.des0(item)}')
+
+    def optssaSearch1__1(self, node, item):
+        return self.logr(f'[optssaSearch1] {util.des0(node)} {util.des0(item)}')
+
     def parseObj__1(self, obj):
         return self.logr(f'[parseObj] {util.desTyp(obj)}')
 
@@ -171,8 +179,8 @@ class Logc(loglib.Logc, metaclass=loglib.LogcMeta):
                 return key
         return f1
 
-    def unredunRepl__1(self, node, repl, k):
-        with self.logr(f'[unredunRepl] {util.desTyp(node)}'):
+    def unredunReplace__1(self, node, repl, k):
+        with self.logr(f'[unredunReplace] {util.desTyp(node)}'):
             self.logr(f'repl: {util.desTyp(repl)}')
             return self.logr(f'key: {k!r}')
 

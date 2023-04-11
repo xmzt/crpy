@@ -17,7 +17,7 @@ import sys
 
 logr = loglib.Logr5File()
 g_logc = logclib.g_logc = logclib.Logc().logrSet(logr).dumpNodeTreeInit('t.nodetree.log.').kvSet(
-    err=1, chain=0, code=0, dumpNodeTreePhase=0, eva=0, insert=0, off=0, phase=1, scan=0, scope=0, unredun=0,
+    err=1, chain=0, code=0, dumpNodeTreeFro=1, dumpNodeTreePhase=1, eva=0, insert=0, off=0, phase=1, scan=0, scope=0, unredun=0, zy=1,
 )
 
 import machlib
@@ -93,10 +93,7 @@ def gram0(mach):
         mach.parse(f'WS {x!r} PUNC_{chtab.name(x)} (= tokTyp TokTyp.{chtab.name(x)}) (tokAdd) (src+) WS')
 
     mach.parse(r'''
-    WS '..' (insert) (= srcTmp0 src)
     WS '..' PUNC_Dot_Dot (= tokTyp TokTyp.Dot) (tokAdd) (src+ 1) (= tokSrc (+ srcTmp0 1)) WS.to.Dot
-
-    WS '%:%' (insert) (= srcTmp0 src)
     WS '%:%' PUNC_Per_Col_Per (= tokTyp TokTyp.Per_Col) (tokAdd) (src+ 2) (= tokSrc (+ srcTmp0 2)) WS.to.Per
 
     #------------------------------------------------------------------------------------------------------------------
@@ -191,10 +188,14 @@ def gram0(mach):
                       (-= bsuI 1) (if (== 0 bsuI) QUOT_BSU_FIN) QUOT_BSU
     QUOT_BSU_FIN      (acc tmpU) QUOT
 
-    WS (- (WS.to.chset) wsAll) (insert) (= tokSrc src)
     (@ = condV (mach.condNemptyV))
     (for node0 condV) bs (for eol eolV) (src+from node0) (line+) node0
     (for node0 condV) bs ? (off- 1) (sameTo node0)
+
+    # insert must be done in proper order because they will affect subsequent lookups
+    WS '%:%' (insert) (= srcTmp0 src)
+    WS '..' (insert) (= srcTmp0 src)
+    WS (- (WS.to.chset) wsAll) (insert) (= tokSrc src)
     ''')
 
 # grammar end

@@ -107,7 +107,6 @@ class Mach:
             
         }
         self.errN = 0
-        self.insertObjV = []
         self.mark = 0
         self.nodeDset = {}
         self.nodeUniqI = 0
@@ -116,7 +115,9 @@ class Mach:
         self.topTranDset = {}
         self.tranPrio1I = 0
         #self.verifyN
-
+        self.optssaItemLdV = []
+        self.optssaGroupDset = {}
+        
         self.diag0 = objlib.Diag0()
         self.voidObj = objlib.VoidObj(self, self.diag0)
         self.nodeNset = nodelib.NodeNset(self, self.diag0)
@@ -196,15 +197,15 @@ class Mach:
         
     def phaseCompilFromGram(self, path):
         self.phaseGram()
-        self.phaseInsert()
         self.phaseOff()
         self.phaseCheck()
         self.phaseUnredun()
+        self.phaseOptssa()
         self.phaseCompil(path)
 
     def phaseFin(self):
-        g_logc.phaseStat(self)
         g_logc.dumpNodeTreePhase(self)
+        g_logc.phaseStat(self)
         if self.errN:
             raise ErrNException(self.errN)
 
@@ -212,12 +213,6 @@ class Mach:
         with g_logc.phaseGo('gram'):
             self.phaseFin()
         
-    def phaseInsert(self):
-        with g_logc.phaseGo('insert'):
-            for obj in self.insertObjV:
-                obj.insertGo()
-            self.phaseFin()
-
     def phaseOff(self):
         with g_logc.phaseGo('offProp'):
             self.offErrDset = {}
@@ -273,14 +268,23 @@ class Mach:
                             node,repl = repl,node
                     
                         replN += 1
-                        g_logc.unredunRepl(node, repl, k)
-                        for tran in node.replace(repl):
-                            tran.unredunRegFro()
+                        g_logc.unredunReplace(node, repl, k)
+                        node.unredunReplace(repl)
                         del self.nodeDset[id(node)]
 
             g_logc.unredunStat(self, replN)
             self.phaseFin()
-        
+
+    def phaseOptssa(self):
+        with g_logc.phaseGo('optssa'):
+            for node in self.nodeDset.values():
+                node.optssaInit()
+            for item in self.optssaItemLdV:
+                item.node.optssaSearch0(item)
+            for group in self.optssaGroupDset.values():
+                group.finalize()
+            self.phaseFin()
+                
     def phaseCompil(self, path):
         with g_logc.phaseGo(f'compil {path!r}'):
             with open(path, 'w') as f:
