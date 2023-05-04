@@ -5,7 +5,7 @@ def mfunBySigAddParamV(mfunBySig, paramV, fragr, funFromSig):
     if fragr.voidPtrSti.child is not paramV[0].child:
         raise Exception('voidPtr expected at paramV[0]')
     mtypV = [ ctyplib.PyObjectPtrMtyp((fragr.pyObjectPtrSelfSti.copy(),)) ]
-    fragr.symtab.mtypTrieMtypVFromStiV(mtypV, paramV[1:], lambda sti: id(sti.child))
+    fragr.symtab.mtypVFromStiV(mtypV, paramV[1:], lambda sti: id(sti.child))
     sig = '_'.join([mtyp.Nick for mtyp in mtypV[1:]])
     if None is (mfun := mfunBySig.get(sig)):
         mfunBySig[sig] = mfun = CpyCbMfun(funFromSig(sig), mtypV)

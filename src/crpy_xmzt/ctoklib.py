@@ -19,6 +19,7 @@ def TokTypMeta(name, bases, namespace, **kwds):
         'Colon',
         'Comma',
         'Eq',
+        'Hash',
         'ParenL',
         'ParenR',
         'Semi',
@@ -75,6 +76,7 @@ class Tok:
         ':': TokTyp.Colon,
         ',': TokTyp.Comma,
         '=': TokTyp.Eq,
+        '#': TokTyp.Hash,
         '(': TokTyp.ParenL,
         ')': TokTyp.ParenR,
         ';': TokTyp.Semi,
@@ -116,7 +118,7 @@ class Tok:
         self.typ = typ
         self.val = val
     
-    Re = re.compile(r'\s*(([{}\[\]:,=();*])|(\w+)|(/\*.*?\*/)|(//(?m:.*?$))|$)', re.S)
+    Re = re.compile(r'\s*(([{}\[\]:,=#();*])|(\w+)|(/\*.*?\*/)|(//(?m:.*?$))|$)', re.S)
 
     @classmethod
     def fromReMatch(cls, m):

@@ -99,12 +99,21 @@ class Fragr:
                    'Void',
                    'Volatile')
 
-    def __init__(self, symtab):
-        #externally defined
-        #spec.specSlst
+    def __init__(self, foo=None, specSlst=1):
+        self.specSlst = specSlst
 
-        self.symtab = symtab
+    def goStart(self, scope, src):
+        self.scope = scope
+        self.startCall()
+        self.goSrc(src)
+        return self.scope
 
+    def typStiFromStr(cls, scope, src):
+        self.scope = scope
+        self.startTypCall()
+        self.goSrc(src)
+        return self.result
+        
     def logTok(self, tok, state): pass
     def logStack(self, fragr): pass
 
@@ -116,20 +125,6 @@ class Fragr:
             i = m.end(0)
             self.tok = Tok.fromReMatch(m)
             self.tokGo()
-
-    def goStart(self, src):
-        self.startCall()
-        self.goSrc(src)
-
-    def goStartScopeNew0(self, src):
-        scope = self.symtab.scopeSetNew0()
-        self.goStart(src)
-        return scope
-        
-    def typStiFromStr(self, src):
-        self.startTypCall()
-        self.goSrc(src)
-        return self.result
 
     def stackDump(self, logr, pre):
         if None is self.stack:
@@ -250,7 +245,7 @@ class Fragr:
 
     def sm_ratorParenL_Iden(self):
         # todo does this need to match any tok that might start a spec?
-        if None is not (sti := self.symtab.get(self.tok.val)) and sti.typP():
+        if None is not (sti := self.scope.idenGet(self.tok.val)) and sti.typP():
             # fun with empty root
             self.stack.rev = castlib.TypFun(castlib.SymtabItem(None, None, self.stack.tmpPos))
             self.paramListCall(self.ratorRoot__other, self.stack.rev) # ratorRootOther pops next stack frame
@@ -342,13 +337,13 @@ class Fragr:
 
     def sm_spec__other(self):
         if not (castlib.SpecFlag.TypSpecNprimitive & self.stack.spec.flags):
-            if None is (sti := self.symtab.primGet(castlib.SpecFlag.TypSpecMask & self.stack.spec.flags)):
+            if None is (typ := self.scope.primGet(castlib.SpecFlag.TypSpecMask & self.stack.spec.flags)):
                 raise SpecInvalidException(self.tok.pos)
-            self.stack.spec.child = sti.child
+            self.stack.spec.child = typ
 
         # extract TypQual flags
         if (qualFlags := castlib.SpecFlag.TypQualMask & self.stack.spec.flags):
-            self.stack.spec.child = castlib.TypMod(self.stack.spec.child, qualFlags).uniq1(self.symtab)
+            self.stack.spec.child = castlib.TypMod(self.stack.spec.child, qualFlags).uniq1(self.scope)
 
         self.stackPopRet(self.stack.spec)
             
@@ -369,12 +364,12 @@ class Fragr:
         if castlib.SpecFlag.TypSpecMask & self.stack.spec.flags:
             self.sm_spec__other()
         else:
-            if None is (sti := self.symtab.get(self.tok.val)):
-                sti = self.symtab.idenPut(castlib.TypUnknown(self.tok.val), self.tok.pos)
+            if None is (sti := self.scope.idenGet(self.tok.val)):
+                sti = self.scope.idenPutTyp(castlib.TypUnknown(self.tok.val), self.tok.pos)
             elif not sti.typP():
                 raise TypExpectedException(self.tok.pos)
             
-            sti.child.parseSpecFromThis(self.stack.spec, self.symtab)
+            sti.child.parseSpecFromThis(self.stack.spec, self.scope)
             self.stack.spec.flags |= castlib.SpecFlag.TypSpecNprimitive 
             self.state = 'spec'
 
@@ -430,11 +425,10 @@ class Fragr:
     def sm_spec_Long(self):
         if castlib.SpecFlag.TypSpecNprimitive & self.stack.spec.flags:
             raise SpecInvalidException(self.tok.pos)
-        if castlib.SpecFlag.TypSpecLong1 & self.stack.spec.flags:
-            if castlib.SpecFlag.TypSpecLong2 & self.stack.spec.flags:
-                raise SpecInvalidException(self.tok.pos)
-            else:
-                self.stack.spec.flags |= castlib.SpecFlag.TypSpecLong2
+        elif castlib.SpecFlag.TypSpecLong2 & self.stack.spec.flags:
+            raise SpecInvalidException(self.tok.pos)
+        elif castlib.SpecFlag.TypSpecLong1 & self.stack.spec.flags:
+            self.stack.spec.flags ^= castlib.SpecFlag.TypSpecLong1 | castlib.SpecFlag.TypSpecLong2
         else:
             self.stack.spec.flags |= castlib.SpecFlag.TypSpecLong1
             
@@ -479,7 +473,8 @@ class Fragr:
         self.tokGo()
 
     def specAtomicParenLRatorRet(self, rev):
-        self.stack.spec.child = self.stack.tmpAtomicSpec.ratorRevStiUniq(self.symtab, rev).toAtomic(self.stack.tmpAtomicSpec)
+        self.stack.spec.child = (self.stack.tmpAtomicSpec.ratorRevStiUniq(self.scope, rev)
+                                 .toAtomic(self.stack.tmpAtomicSpec))
         self.state = 'specAtomicParenLRator'
         self.tokGo()
 
@@ -490,21 +485,21 @@ class Fragr:
     # specEnum
         
     def sm_specEnum_BraceL(self):
-        self.stack.tmpSti = self.symtab.enumNewAnon()
-        self.stack.tmpSti.pos = self.stack.tmpPos
-        self.stack.spec.child = self.stack.tmpSti.child
+        self.stack.tmpTyp = self.scope.enumNewAnon()
+        self.stack.tmpTyp.pos = self.stack.tmpPos
+        self.stack.spec.child = self.stack.tmpTyp
         self.stack.spec.child.itemsInit()
         self.enumBraceLCall(self.specEnumIdenBraceLRet, self.stack.spec.child)
 
     def sm_specEnum_Iden(self):
-        self.stack.tmpSti = self.symtab.enumGetOrNew(self.tok.val)
-        self.stack.spec.child = self.stack.tmpSti.child
+        self.stack.tmpTyp = self.scope.enumGetOrNew(self.tok.val)
+        self.stack.spec.child = self.stack.tmpTyp
         self.state = 'specEnumIden'
         
     sm_specEnumIden__other = sm_spec__other
 
     def sm_specEnumIden_BraceL(self):
-        self.stack.tmpSti.pos = self.stack.tmpPos
+        self.stack.tmpTyp.pos = self.stack.tmpPos
         self.stack.spec.child.itemsInit()
         self.enumBraceLCall(self.specEnumIdenBraceLRet, self.stack.spec.child)
 
@@ -518,21 +513,21 @@ class Fragr:
     # specStruct
 
     def sm_specStruct_BraceL(self):
-        self.stack.tmpSti = self.symtab.structNewAnon()
-        self.stack.tmpSti.pos = self.stack.tmpPos
-        self.stack.spec.child = self.stack.tmpSti.child
+        self.stack.tmpTyp = self.scope.structNewAnon()
+        self.stack.tmpTyp.pos = self.stack.tmpPos
+        self.stack.spec.child = self.stack.tmpTyp
         self.stack.spec.child.itemsInit()
         self.suBraceLCall(self.specStructIdenBraceLRet, self.stack.spec.child)
         
     def sm_specStruct_Iden(self):
-        self.stack.tmpSti = self.symtab.structGetOrNew(self.tok.val)
-        self.stack.spec.child = self.stack.tmpSti.child
+        self.stack.tmpTyp = self.scope.structGetOrNew(self.tok.val)
+        self.stack.spec.child = self.stack.tmpTyp
         self.state = 'specStructIden'
 
     sm_specStructIden__other = sm_spec__other
 
     def sm_specStructIden_BraceL(self):
-        self.stack.tmpSti.pos = self.stack.tmpPos
+        self.stack.tmpTyp.pos = self.stack.tmpPos
         self.stack.spec.child.itemsInit()
         self.suBraceLCall(self.specStructIdenBraceLRet, self.stack.spec.child)
 
@@ -546,21 +541,21 @@ class Fragr:
     # specUnion
 
     def sm_specUnion_BraceL(self):
-        self.stack.tmpSti = self.symtab.unionNewAnon()
-        self.stack.tmpSti.pos = self.stack.tmpPos
-        self.stack.spec.child = self.stack.tmpSti.child
+        self.stack.tmpTyp = self.scope.unionNewAnon()
+        self.stack.tmpTyp.pos = self.stack.tmpPos
+        self.stack.spec.child = self.stack.tmpTyp
         self.stack.spec.child.itemsInit()
         self.suBraceLCall(self.specUnionIdenBraceLRet, self.stack.spec.child)
         
     def sm_specUnion_Iden(self):
-        self.stack.tmpSti = self.symtab.unionGetOrNew(self.tok.val)
-        self.stack.spec.child = self.stack.tmpSti.child
+        self.stack.tmpTyp = self.scope.unionGetOrNew(self.tok.val)
+        self.stack.spec.child = self.stack.tmpTyp
         self.state = 'specUnionIden'
 
     sm_specUnionIden__other = sm_spec__other
 
     def sm_specUnionIden_BraceL(self):
-        self.stack.tmpSti.pos = self.stack.tmpPos
+        self.stack.tmpTyp.pos = self.stack.tmpPos
         self.stack.spec.child.itemsInit()
         self.suBraceLCall(self.specUnionIdenBraceLRet, self.stack.spec.child)
 
@@ -634,7 +629,7 @@ class Fragr:
         self.tokGo()
         
     def suBraceLRatorRet(self, rev):
-        self.stack.sti = self.stack.spec.ratorRevStiUniq(self.symtab, rev)
+        self.stack.sti = self.stack.spec.ratorRevStiUniq(self.scope, rev)
         self.state = 'suBraceLRator'
         self.tokGo()
 
@@ -683,7 +678,7 @@ class Fragr:
         self.tokGo()
 
     def paramListRatorRet(self, rev):
-        self.stack.typ.paramAdd(self.stack.spec.ratorRevStiUniq(self.symtab, rev).toParam(self.stack.spec))
+        self.stack.typ.paramAdd(self.stack.spec.ratorRevStiUniq(self.scope, rev).toParam(self.stack.spec))
         self.state = 'paramListRator'
         self.tokGo()
 
@@ -707,12 +702,12 @@ class Fragr:
         self.tokGo()
 
     def topDeclRatorRet(self, rev):
-        self.stack.sti = self.stack.spec.ratorRevStiUniq(self.symtab, rev)
+        self.stack.sti = self.stack.spec.ratorRevStiUniq(self.scope, rev)
         self.state = 'topDeclRator'
         self.tokGo()
 
     def sm_topDeclRator_Comma(self):
-        self.symtab.itemPut(self.stack.sti.toDecl(self.stack.spec))
+        self.scope.idenPutSti(self.stack.sti.toDecl(self.stack.spec))
         self.ratorCall(self.topDeclRatorRet)
         
     def sm_topDeclRator_Eq(self):
@@ -724,15 +719,15 @@ class Fragr:
         self.tokGo()
         
     def sm_topDeclRatorEqInitr_Semi(self):
-        self.symtab.itemPut(self.stack.sti.toDeclInitr(self.stack.spec, self.stack.initr))
+        self.scope.idenPutSti(self.stack.sti.toDeclInitr(self.stack.spec, self.stack.initr))
         self.stackPopRet()
         
     def sm_topDeclRatorEqInitr_Comma(self):
-        self.symtab.itemPut(self.stack.sti.toDeclInitr(self.stack.spec, self.stack.initr))
+        self.scope.idenPutSti(self.stack.sti.toDeclInitr(self.stack.spec, self.stack.initr))
         self.ratorCall(self.topDeclRatorRet)
         
     def sm_topDeclRator_Semi(self):
-        self.symtab.itemPut(self.stack.sti.toDecl(self.stack.spec))
+        self.scope.idenPutSti(self.stack.sti.toDecl(self.stack.spec))
         self.stackPopRet()
 
     #--------------------------------------------------------------------------------------------------------------------
@@ -774,7 +769,7 @@ class Fragr:
         self.tokGo()
 
     def startTypRatorRet(self, rev):
-        self.stack.sti = self.stack.spec.ratorRevStiUniq(self.symtab, rev)
+        self.stack.sti = self.stack.spec.ratorRevStiUniq(self.scope, rev)
         self.state = 'startTypRator'
         self.tokGo()
 

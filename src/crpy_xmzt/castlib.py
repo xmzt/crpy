@@ -5,6 +5,8 @@ class FlagsUnexpectedException(CastException): pass
 class RatorIdenExpectedException(CastException): pass
 class RatorIdenUnexpectedException(CastException): pass
 class RedefinitionException(CastException): pass
+class ScopeResolutionOrderException(CastException): pass
+class ScopeUpdateMismatchException(CastException): pass
 class TypedefUnexpectedException(CastException): pass
 
 #------------------------------------------------------------------------------------------------------------------------
@@ -32,7 +34,7 @@ def SpecFlagMeta(name, bases, namespace, **kwds):
         ('TypSpecUnsigned', 'unsigned'), 
         ('TypSpecComplex', '_Complex'), 
         ('TypSpecLong1', 'long'),
-        ('TypSpecLong2', 'long'),
+        ('TypSpecLong2', 'long long'),
         ('TypSpecShort', 'short'), 
         ('TypSpecBool', '_Bool'), 
         ('TypSpecChar', 'char'), 
@@ -70,6 +72,43 @@ class CanonClas:
     Ptr = 2
 
 #------------------------------------------------------------------------------------------------------------------------
+# PyTyp
+#------------------------------------------------------------------------------------------------------------------------
+
+def pyTypVFromStiV(stiV):
+    # first pass calculates nominal PyTyp class to handle each sti
+    for sti in stiV:
+        sti.pyTypClas = sti.pyTypClasGet()
+
+    # second pass calls class method pyTypVAdd on each sti.pyTypClas to add PyTyp-derived instances to pyTypV.
+    # params stiV,i allow an invocation of pyTypVAdd to consume additional sti (e.g. ctyplib.BPyTyp).
+    # usually the additionally consumed sti will have pyTypClas set to PyTypSkip
+    pyTypV = []
+    for i,sti in enumerate(stiV):
+        sti.pyTypClas.pyTypVAdd(pyTypV, sti, stiV, i)
+    return pyTypV
+
+class PyTyp:
+    @classmethod
+    def b1P(cls): return False
+    
+    @classmethod
+    def pyTypVAdd(cls, pyTypV, sti, stiV, i):
+        pyTypV.append(cls(sti))
+
+    def __init__(self, sti):
+        self.sti = sti
+
+    def getr(self, pre): return None 
+    def setr(self, pre, valIden): return None 
+
+class PyTypUnknown(PyTyp): pass
+
+class PyTypSkip(PyTyp):
+    @classmethod
+    def pyTypVAdd(cls, pyTypV, sti, stiV, i): pass
+
+#------------------------------------------------------------------------------------------------------------------------
 # Typ
 #------------------------------------------------------------------------------------------------------------------------
 
@@ -82,23 +121,30 @@ class Typ:
         childL,childR = self.canonLR()
         return f'{childL}{childR}' if None is up else f'{childL} {up}{childR}'
 
-    def uniq1(self, symtab):
+    def nick(self):
+        return self.__class__.__name__[:-3]
+
+    def uniq1(self, scope):
         return self
 
-    def uniq1Norm(self, symtab):
+    def uniq1Norm(self, scope):
         return self
 
-    def parseSpecFromThis(self, spec, symtab):
+    def parseSpecFromThis(self, spec, scope):
         spec.child = self
 
-    def parseSpecToTop(self, spec, symtab):
+    def parseSpecToTop(self, spec, scope):
         topFlags = SpecFlag.TopMask & spec.flags
         if None is not spec.alignas:
-            return TypModAlignas(self, topFlags, spec.alignas).uniq1(symtab)
+            return TypModAlignas(self, topFlags, spec.alignas).uniq1(scope)
         elif topFlags:
-            return TypMod(self, topFlags).uniq1(symtab)
+            return TypMod(self, topFlags).uniq1(scope)
         else:
             return self
+
+    def pyTypClasGet(self): return PyTypUnknown
+    def pyTypArrayClasGet(self): return PyTypUnknown
+    def pyTypPtrClaxsGet(self): return PyTypUnknown
 
 #------------------------------------------------------------------------------------------------------------------------
 # TypArray
@@ -126,11 +172,13 @@ class TypArray(Typ):
         x = None if None is self.toks else self.toksS()
         return (childL, f'[{x}]{childR}')
 
-    def uniq1(self, symtab):
-        return symtab.uniqtab.setdefault(('TypArray', id(self.child), *[tok.val for tok in self.toks]), self)
+    def uniq1(self, scope):
+        return scope.glo.uniqtab.setdefault(('TypArray', id(self.child), *[tok.val for tok in self.toks]), self)
 
-    def uniq1Norm(self, symtab):
-        return TypArray(self.child, []).uniq1(symtab)
+    def uniq1Norm(self, scope):
+        return TypArray(self.child, []).uniq1(scope)
+
+    def pyTypClasGet(self): return self.child.pyTypArrayClasGet()
     
 #------------------------------------------------------------------------------------------------------------------------
 # TypAtomic
@@ -149,8 +197,8 @@ class TypAtomic(Typ):
     def canonLR(self):
         return (f'_Atomic({self.child.canon(None)})', '')
     
-    def uniq1(self, symtab):
-        return symtab.uniqtab.setdefault(('TypAtomic', id(self.child)), self)
+    def uniq1(self, scope):
+        return scope.glo.uniqtab.setdefault(('TypAtomic', id(self.child)), self)
 
 #------------------------------------------------------------------------------------------------------------------------
 # TypEnum
@@ -222,8 +270,8 @@ class TypFun(Typ):
         x = ', '.join([sti.canon() for sti in self.paramV])
         return (childL, f'({x}){childR}')
     
-    def uniq1(self, symtab):
-        return symtab.uniqtab.setdefault(('TypFun', id(self.child), *[id(param) for param in self.paramV]), self)
+    def uniq1(self, scope):
+        return scope.glo.uniqtab.setdefault(('TypFun', id(self.child), *[id(param) for param in self.paramV]), self)
 
 #------------------------------------------------------------------------------------------------------------------------
 # TypIden
@@ -265,21 +313,25 @@ class TypMod(Typ):
             l.append(childL)
         return (' '.join(l), childR)
 
-    def uniq1(self, symtab):
-        return symtab.uniqtab.setdefault(('TypMod', id(self.child), self.flags), self)
+    def uniq1(self, scope):
+        return scope.glo.uniqtab.setdefault(('TypMod', id(self.child), self.flags), self)
         
-    def parseSpecFromThis(self, spec, symtab):
+    def parseSpecFromThis(self, spec, scope):
         spec.child = self.child
         spec.flags |= self.flags
         
-    def parseSpecToTop(self, spec, symtab):
+    def parseSpecToTop(self, spec, scope):
         topFlags = SpecFlag.TopMask & spec.flags
         if None is not spec.alignas:
-            return TypModAlignas(self.child, self.flags | topFlags, spec.alignas).uniq1(symtab)
+            return TypModAlignas(self.child, self.flags | topFlags, spec.alignas).uniq1(scope)
         elif topFlags:
-            return TypMod(self.child, self.flags | topFlags).uniq1(symtab)
+            return TypMod(self.child, self.flags | topFlags).uniq1(scope)
         else:
             return self
+
+    def pyTypClasGet(self): return self.child.pyTypClasGet()
+    def pyTypArrayClasGet(self): return self.child.pyTypArrayClasGet()
+    def pyTypPtrClasGet(self): return self.child.pyTypPtrClasGet()
 
 #------------------------------------------------------------------------------------------------------------------------
 # TypModAlignas
@@ -308,18 +360,18 @@ class TypModAlignas(TypMod):
             l.append(childL)
         return (' '.join(l), childR)
 
-    def uniq1(self, symtab):
-        return symtab.uniqtab.setdefault(('TypModAlignas', id(self.child), topFlags, id(self.alignas)), self)
+    def uniq1(self, scope):
+        return scope.glo.uniqtab.setdefault(('TypModAlignas', id(self.child), topFlags, id(self.alignas)), self)
 
-    def parseSpecFromThis(self, spec, symtab):
+    def parseSpecFromThis(self, spec, scope):
         spec.child = self.child
         spec.flags |= self.flags
         if None is spec.alignas:
             spec.alignas = self.alignas
                 
-    def parseSpecToTop(self, spec, symtab):
+    def parseSpecToTop(self, spec, scope):
         topFlags = SpecFlag.TopMask & spec.flags
-        return TypModAlignas(self.child, self.flags | topFlags, self.alignas).uniq1(symtab)
+        return TypModAlignas(self.child, self.flags | topFlags, self.alignas).uniq1(scope)
 
 #------------------------------------------------------------------------------------------------------------------------
 # TypPrim
@@ -358,9 +410,11 @@ class TypPtr(Typ):
         else:
             return (f'{childL} *', childR)
 
-    def uniq1(self, symtab):
-        return symtab.uniqtab.setdefault(('TypPtr', id(self.child)), self)
+    def uniq1(self, scope):
+        return scope.glo.uniqtab.setdefault(('TypPtr', id(self.child)), self)
     
+    def pyTypClasGet(self): return self.child.pyTypPtrClasGet()
+
 #------------------------------------------------------------------------------------------------------------------------
 # TypSu TypStruct TypUnion
 #------------------------------------------------------------------------------------------------------------------------
@@ -440,43 +494,18 @@ class ParseSpec:
             logr(f'[flags] {self.flags!r}')
             logr(f'[alignas] {self.alignas!r}')
         
-    def ratorRevStiUniq(self, symtab, rev):
+    def ratorRevStiUniq(self, scope, rev):
         child = self.child
         while None is not rev:
             x = rev
             rev = rev.child
             x.child = child
-            child = x.uniq1(symtab)
+            child = x.uniq1(scope)
         # assert: child is an sti
 
-        child.child = child.child.parseSpecToTop(self, symtab)
+        child.child = child.child.parseSpecToTop(self, scope)
         return child
         
-#------------------------------------------------------------------------------------------------------------------------
-# Mtyp
-#------------------------------------------------------------------------------------------------------------------------
-    
-class Mtyp:
-    #Nick = None
-
-    def __init__(self, stiV):
-        self.stiV = stiV
-        
-    def dump(self, logr, pre):
-        with logr(f'{pre}{self.__class__.__name__} nick={self.Nick} stiV.n={len(self.stiV)}'):
-            with logr(f'stiV'):
-                for i,sti in enumerate(self.stiV):
-                    sti.dump(logr, f'[{i}] ')
-                
-    def pyObjCode(self, fieldF): raise Exception()
-    def pyFmt(self, fieldF): raise Exception()
-
-class UnknownMtyp(Mtyp):
-    Nick = 'unknown'
-    
-    def pyObjCode(self, fieldF): return f'PyUnicode_FromString("<UNIMPLEMENTED:{self.stiV[0].iden}>")'
-    def pyFmt(self, fieldF): return f'{{{fieldF(self.stiV[0])}}}'
-
 #------------------------------------------------------------------------------------------------------------------------
 # SymtabItem
 #
@@ -503,7 +532,7 @@ class SymtabItem:
     def canon(self):
         return self.iden if None is self.child else self.child.canon(self.iden)
 
-    def uniq1(self, symtab):
+    def uniq1(self, scope):
         return self
 
     def toAtomic(self, spec):
@@ -538,7 +567,7 @@ class SymtabItem:
         if SpecFlag.StorageClasTypedef & spec.flags:
             raise TypedefUnexpectedException(self.pos)
         return self
-
+    
 class SymtabItemBitfield(SymtabItem):
     def __init__(self, iden, child, pos, bitfield):
         super().__init__(iden, child, pos)
@@ -578,159 +607,203 @@ class SymtabItemTypedef(SymtabItem):
         return f'typedef {super().canon()}'
     
 #------------------------------------------------------------------------------------------------------------------------
-# Symtab Scope
+# SymtabItemIterator
+#------------------------------------------------------------------------------------------------------------------------
+
+class SymtabItemIterator:
+    def __init__(self, v, pre=None):
+        self.v = v[:]
+        self.i = 0
+        #self.cur 
+        
+    def __iter__(self):
+        return self
+        
+    def __next__(self):
+        while self.i < len(self.v):
+            self.cur = self.v[self.i]
+            self.i += 1
+            if None is not self.cur:
+                return self.cur
+        raise StopIteration()
+
+    def nextIs(self, isMeth):
+        if self.i < len(self.v):
+            if None is not (cur1 := self.v[self.i]):
+                if getattr(cur1, isMeth)():
+                    self.i += 1
+                    return cur1
+        return None
+        
+#------------------------------------------------------------------------------------------------------------------------
+# ScopeGlo
 #------------------------------------------------------------------------------------------------------------------------
         
-class Symtab:
+class ScopeGlo:
     def __init__(self):
-        self.scope0 = { None:None }
-        self.scope = self.scope0
         self.uniqtab = {}
-        #todo del self.glo = {}
-        self.mtypTrie = { None:None }
-        
-    def get(self, k):
-        scope = self.scope
-        while None is not scope:
-            if None is not (x := scope.get(k)):
-                return x
-            scope = scope[None]
-        return None
 
-    def getVPre(self, pre):
-        dst = []
-        for k,sti in self.scope.items():
-            if str is type(k) and sti.iden.startswith(pre):
-                sti.idenS = sti.iden[len(pre):]
-                dst.append(sti)
-        return dst
+#------------------------------------------------------------------------------------------------------------------------
+# Scope
+#------------------------------------------------------------------------------------------------------------------------
 
-    def scopeSetNew(self, scopeUp):
-        self.scope = { None:scopeUp }
-        return self.scope
-        
-    def scopeSetNew0(self):
-        self.scope = { None:self.scope0 }
-        return self.scope
+class Scope:
+    def __init__(self, glo, *upV):
+        self.glo = glo
+        self.upV = upV
+        self.idenStiD = {}
+        self.primTypD = {}
+        self.enumTypD = {}
+        self.structTypD = {}
+        self.unionTypD = {}
+
+    def dn(self):
+        return Scope(self.glo, self)
+
+    def updateDict(self, d, od):
+        for ok,ov in od.items():
+            if None is (v := d.get(ok)):
+                d[ok] = ov
+            elif v is not ov:
+                raise ScopeUpdateMismatchException(ok, v, ov)
+
+    def update(self, other):
+        self.updateDict(self.idenStiD, other.idenStiD)
+        self.updateDict(self.primTypD, other.primTypD)
+        self.updateDict(self.enumTypD, other.enumTypD)
+        self.updateDict(self.structTypD, other.structTypD)
+        self.updateDict(self.unionTypD, other.unionTypD)
     
-    def scopePop(self):
-        x = self.scope
-        self.scope = self.scope[None]
-        return x
-
-    def scopePush(self):
-        self.scope = { None:self.scope }
-        return self.scope
-
     #--------------------------------------------------------------------------------------------------------------------
     # typ-specific
 
+    def idenGet(self, iden):
+        if None is not (sti := self.idenStiD.get(iden)):
+            return sti
+        for up in self.upV:
+            if None is not (sti := up.idenGet(iden)):
+                return sti
+        return None
+
+    def idenGetVPre(self, pre):
+        stiV = []
+        for sti in self.idenStiD.values():
+            if sti.iden.startswith(pre):
+                sti.idenS = sti.iden[len(pre):]
+                stiV.append(sti)
+        return stiV
+
+    def idenPutSti(self, sti):
+        self.idenStiD[sti.iden] = sti
+        return self
+
+    def idenPutTyp(self, typ, pos):
+        sti = SymtabItemTypedef(typ.iden, typ, pos)
+        self.idenStiD[sti.iden] = sti
+        return sti
+
     def primGet(self, flags):
-        return self.get(('p', flags))
+        if None is not (typ := self.primTypD.get(flags)):
+            return typ
+        for up in self.upV:
+            if None is not (typ := up.primGet(flags)):
+                return typ
+        return None
     
     def primPut(self, typ, *aliasFlagss):
-        sti = SymtabItemTypedef(('p', typ.flags), typ, None)
-        self.scope[sti.iden] = sti
+        self.primTypD[typ.flags] = typ
         for flags in aliasFlagss:
-            self.scope[('p', flags)] = sti
-        return sti
+            self.primTypD[flags] = typ
+        return typ
 
-    def idenPut(self, typ, pos):
-        sti = SymtabItemTypedef(typ.iden, typ, pos)
-        self.scope[sti.iden] = sti
-        return sti
-
-    def enumNewAnon(self):
-        x = TypEnum(None)
-        sti = SymtabItemTypedef(('e', x.idenOrId()), x, None)
-        self.scope[sti.iden] = sti
-        return sti
+    def enumGet(self, iden):
+        if None is not (typ := self.enumTypD.get(iden)):
+            return typ
+        for up in self.upV:
+            if None is not (typ := up.enumGet(iden)):
+                return typ
+        return None
 
     def enumGetOrNew(self, iden):
-        if None is (sti := self.get(k := ('e', iden))):
-            self.scope[k] = sti = SymtabItemTypedef(k, TypEnum(None), None)
-        return sti
+        if None is (typ := self.enumGet(iden)):
+            typ = self.enumTypD[iden] = TypEnum(iden)
+        return typ
     
-    def structNewAnon(self):
-        x = TypStruct(None)
-        sti = SymtabItemTypedef(('s', x.idenOrId()), x, None)
-        self.scope[sti.iden] = sti
-        return sti
+    def enumNewAnon(self):
+        typ = TypEnum(None)
+        self.enumTypD[id(typ)] = typ
+        return typ
+
+    def structGet(self, iden):
+        if None is not (typ := self.structTypD.get(iden)):
+            return typ
+        for up in self.upV:
+            if None is not (typ := up.structGet(iden)):
+                return typ
+        return None
 
     def structGetOrNew(self, iden):
-        if None is (sti := self.get(k := ('s', iden))):
-            self.scope[k] = sti = SymtabItemTypedef(k, TypStruct(None), None)
-        return sti
+        if None is (typ := self.structGet(iden)):
+            typ = self.structTypD[iden] = TypStruct(iden)
+        return typ
     
-    def unionNewAnon(self):
-        x = TypUnion(None)
-        sti = SymtabItemTypedef(('u', x.idenOrId()), x, None)
-        self.scope[sti.iden] = sti
-        return sti
+    def structNewAnon(self):
+        typ = TypStruct(None)
+        self.structTypD[id(typ)] = typ
+        return typ
+
+    def unionGet(self, iden):
+        if None is not (typ := self.unionTypD.get(iden)):
+            return typ
+        for up in self.upV:
+            if None is not (typ := up.unionGet(iden)):
+                return typ
+        return None
 
     def unionGetOrNew(self, iden):
-        if None is (sti := self.get(k := ('u', iden))):
-            self.scope[k] = sti = SymtabItemTypedef(k, TypUnion(None), None)
-        return sti
-
-    def itemPut(self, item):
-        self.scope[item.iden] = item
-        return self
+        if None is (typ := self.unionGet(iden)):
+            typ = self.unionTypD[iden] = TypUnion(iden)
+        return typ
+    
+    def unionNewAnon(self):
+        typ = TypUnion(None)
+        self.unionTypD[id(typ)] = typ
+        return typ
 
     #--------------------------------------------------------------------------------------------------------------------
     # dump
-
-    def dump(self, logr, pre):
+    
+    def dump(self, logr, pre, dumpUp=0):
         with logr(f'{pre}{self.__class__.__name__}'):
-            scope = self.scope
-            while None is not scope:
-                with logr(f'scope <{id(scope)}>'):
-                    self.dumpScope(logr, scope)
-                    scope = scope[None]
+            if dumpUp:
+                for up in self.upV:
+                    with logr('[up]'):
+                        up.dump(logr, pre, dumpUp)
+            for flags,typ in self.primTypD.items():
+                typ.dump(logr, f'prim {SpecFlag.des(flags)}: ')
+            for iden,typ in self.enumTypD.items():
+                typ.dump(logr, f'enum {iden!r}: ')
+            for iden,typ in self.structTypD.items():
+                typ.dump(logr, f'struct {iden!r}: ')
+            for iden,typ in self.unionTypD.items():
+                typ.dump(logr, f'union {iden!r}: ')
+            for iden,sti in self.idenStiD.items():
+                sti.dump(logr, f'{iden!r}: ')
                 
-    def dumpScope(self, logr, scope):
-        for k,v in scope.items():
-            if None is not k:
-                v.dump(logr, f'{k!r}: ')
+    def dumpCanon(self, logr, pre, dumpUp=0):
+        with logr(f'{pre}{self.__class__.__name__}'):
+            if dumpUp:
+                for up in self.upV:
+                    with logr('[up]'):
+                        up.dumpCanon(logr, pre, dumpUp)
+            for flags,typ in self.primTypD.items():
+                logr(f'prim {SpecFlag.des(flags)}: {typ.canon(None)}')
+            for iden,typ in self.enumTypD.items():
+                logr(f'enum {iden!r}: {typ.canon(None)}')
+            for iden,typ in self.structTypD.items():
+                logr(f'struct {iden!r}: {typ.canon(None)}')
+            for iden,typ in self.unionTypD.items():
+                logr(f'union {iden!r}: {typ.canon(None)}')
+            for iden,sti in self.idenStiD.items():
+                logr(f'{iden!r}: {sti.canon()}')
 
-    def dumpScopeCanon(self, logr, scope):
-        for k,v in scope.items():
-            if None is not k:
-                logr(f'{k!r}: {v.canon()}')
-
-    #--------------------------------------------------------------------------------------------------------------------
-    # mtyp
-
-    def mtypTriePutTypV(self, typV, mtypClas):
-        b0 = self.mtypTrie
-        for typ in typV:
-            typId = id(typ)
-            if None is (b1 := b0.get(typId)):
-                b1 = b0[typId] = { None:None }
-            b0 = b1
-        b0[None] = mtypClas
-
-    def mtypTrieMtypVFromStiV(self, mtypV, stiV, keyFromSti):
-        iE = len(stiV)
-        i = 0
-        b0 = self.mtypTrie
-        runClas = UnknownMtyp
-        runA = i
-        runE = i + 1
-        while True:
-            if i < iE and None is not (b1 := b0.get(keyFromSti(stiV[i]))):
-                b0 = b1
-                i += 1
-                if None is not (clas := b0[None]):
-                    runClas = clas
-                    runE = i
-            elif runA < iE:
-                mtypV.append(runClas(stiV[runA:runE]))
-                i = runE
-                b0 = self.mtypTrie
-                runClas = UnknownMtyp
-                runA = i
-                runE = i + 1
-            else:
-                break
-        return mtypV

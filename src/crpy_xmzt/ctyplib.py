@@ -1,205 +1,231 @@
-from .castlib import Mtyp,SpecFlag,Symtab,TypIden,TypPrim
-from .cfraglib import Fragr
+from .castlib import PyTyp,PyTypSkip,Scope,ScopeGlo,SpecFlag,TypIden,TypPrim
 
 #------------------------------------------------------------------------------------------------------------------------
-# Mtyp abstract
+# PyTyp
 #------------------------------------------------------------------------------------------------------------------------
 
-class ComplexFloatMtyp(Mtyp): pass
+class BPyTyp(PyTyp):
+    def __init__(self, sti, sti1):
+        self.sti = sti
+        self.sti1 = sti1
+
+    def getr(self, pre):
+        return f'crpyPyBytesFromStringAB({pre}{self.sti.iden}, {pre}{self.sti1.iden})'
     
-class FloatMtyp(Mtyp):
-    def pyObjCode(self, fieldF): return f'PyFloat_FromDouble({fieldF(self.stiV[0])})'
-    def pyFmt(self, fieldF): return f'{{{fieldF(self.stiV[0])}}}'
-
-class LongMtyp(Mtyp):
-    def pyObjCode(self, fieldF): return f'PyLong_FromLong({fieldF(self.stiV[0])})'
-    def pyFmt(self, fieldF): return f'{{{fieldF(self.stiV[0])}}}'
-
-class UlongMtyp(Mtyp):
-    def pyObjCode(self, fieldF): return f'PyLong_FromUnsignedLong({fieldF(self.stiV[0])})'
-    def pyFmt(self, fieldF): return f'{{{fieldF(self.stiV[0])}}}'
+class ComplexFloatPyTyp(PyTyp): pass
     
-#------------------------------------------------------------------------------------------------------------------------
-# Mtyp concrete
-#------------------------------------------------------------------------------------------------------------------------
+class FloatPyTyp(PyTyp):
+    def getr(self, pre): return f'PyFloat_FromDouble({pre}{self.sti.iden})'
 
-class BoolMtyp(LongMtyp): Nick = 'bool'
-class CMtyp(LongMtyp): Nick = 'c'
-class CDMtyp(ComplexFloatMtyp): Nick = 'cd'
-class CFMtyp(ComplexFloatMtyp): Nick = 'cf'
-class CLDMtyp(ComplexFloatMtyp): Nick = 'cld'
-class DMtyp(FloatMtyp): Nick = 'd'
-class FMtyp(FloatMtyp): Nick = 'f'
-class IMtyp(LongMtyp): Nick = 'i'
-class I8Mtyp(LongMtyp): Nick = 'i8'
-class I16Mtyp(LongMtyp): Nick = 'i16'
-class I32Mtyp(LongMtyp): Nick = 'i32'
-class I64Mtyp(LongMtyp): Nick = 'i64'
-class LMtyp(LongMtyp): Nick = 'l'
-class LDMtyp(FloatMtyp): Nick = 'ld'
-class LLMtyp(LongMtyp): Nick = 'll'
-class SMtyp(LongMtyp): Nick = 's'
-class UMtyp(UlongMtyp): Nick = 'u'
-class U8Mtyp(UlongMtyp): Nick = 'u8'
-class U16Mtyp(UlongMtyp): Nick = 'u16'
-class U32Mtyp(UlongMtyp): Nick = 'u32'
-class U64Mtyp(UlongMtyp): Nick = 'u64'
-class UCMtyp(UlongMtyp): Nick = 'uc'
-class ULMtyp(UlongMtyp): Nick = 'ul'
-class ULLMtyp(UlongMtyp): Nick = 'ull'
-class USMtyp(UlongMtyp): Nick = 'us'
-class VoidMtyp(Mtyp): Nick = 'void'
-class ZMtyp(UlongMtyp): Nick = 'z'
+class Id3v2EncodingPyTyp(PyTyp):
+    def getr(self, pre): return f'PyLong_FromUnsignedLong({pre}{self.sti.iden})'
+    def fmt(self, fieldF): return f'{{{fieldF(self.stiV[0])}!r}}'
 
-class BMtyp(Mtyp):
-    Nick = 'b'
-    def pyObjCode(self, fieldF):
-        a = fieldF(self.stiV[0])
-        b = fieldF(self.stiV[1])
-        return f'PyBytes_FromStringAndSize((const char*){a}, {b} - {a})'
-    def pyFmt(self, fieldF): return f'{{{fieldF(self.stiV[0])}!r}}'
+class Id32PyTyp(PyTyp):
+    def getr(self, pre): return f'PyBytes_FromStringAndSize((const char*){pre}{self.sti.iden}.u8s, 4)'
+    def fmt(self, fieldF): return f'{{{fieldF(self.stiV[0])}!r}}'
 
-class Id32Mtyp(Mtyp):
-    Nick = 'id32'
-    def pyObjCode(self, fieldF): return f'PyBytes_FromStringAndSize((const char*){fieldF(self.stiV[0])}.u8s, 4)'
-    def pyFmt(self, fieldF): return f'{{{fieldF(self.stiV[0])}!r}}'
-
-class Id128Mtyp(Mtyp):
-    Nick = 'id128'
-    def pyObjCode(self, fieldF): return f'PyBytes_FromStringAndSize((const char*){fieldF(self.stiV[0])}.u8s, 16)'
-    def pyFmt(self, fieldF): return f'{{{fieldF(self.stiV[0])}.hex()}}'
+class Id128PyTyp(PyTyp):
+    def getr(self, pre): return f'PyBytes_FromStringAndSize((const char*){pre}{self.sti.iden}.u8s, 16)'
+    def fmt(self, fieldF): return f'{{{fieldF(self.stiV[0])}.hex()}}'
     
-class Id3v2EncodingMtyp(Mtyp):
-    Nick = 'id3v2Encoding'
-    def pyObjCode(self, fieldF): return f'PyLong_FromUnsignedLong({fieldF(self.stiV[0])})'
-    def pyFmt(self, fieldF): return f'{{{fieldF(self.stiV[0])}!r}}'
+class LongPyTyp(PyTyp):
+    def getr(self, pre): return f'PyLong_FromLong({pre}{self.sti.iden})'
 
-class PyObjectMtyp(Mtyp):
-    Nick = 'pyo'
-    pass
+class PyObjectPtrPyTyp(PyTyp):
+    def getr(self, pre): return f'{pre}{self.sti.iden}'
+    def fmt(self, fieldF): return f'{{{fieldF(self.stiV[0])}!r}}'
 
-class PyObjectPtrMtyp(Mtyp):
-    Nick = 'pyoPtr'
-    def pyObjCode(self, fieldF): return fieldF(self.stiV[0])
-    def pyFmt(self, fieldF): return f'{{{fieldF(self.stiV[0])}!r}}'
+class U8PtrPyTyp(PyTyp):
+    @classmethod
+    def b1P(cls): return True
 
-class ZArrayMtyp(Mtyp):
-    Nick = 'zarray'
-    def pyObjCode(self, fieldF): return f'McpyTupleSize_t({fieldF(self.stiV[0])}, {self.stiV[0].child.toksS()})'
-    def pyFmt(self, fieldF): return f'{{{fieldF(self.stiV[0])}}}'
+    @classmethod
+    def pyTypVAdd(cls, pyTypV, sti, stiV, i):
+        if (j := i+1) < len(stiV) and (sti1 := stiV[j]).pyTypClas.b1P():
+            sti1.pyTypClas = PyTypSkip
+            pyTypV.append(BPyTyp(sti, sti1))
+        else:
+            pyTypV.append(cls(sti))
 
-class VoidPtrMtyp(Mtyp):
-    Nick = 'voidPtr'
-    def pyObjCode(self, fieldF): return f'PyBytes_FromStringAndSize((const char*){fieldF(self.stiV[0])}, sizeof(void*))'
-    def pyFmt(self, fieldF): return f'0x{{{fieldF(self.stiV[0])}.hex()}}'
+class UlongPyTyp(PyTyp):
+    def getr(self, pre): return f'PyLong_FromUnsignedLong({pre}{self.sti.iden})'
 
-class XUMtyp(UlongMtyp):
-    Nick = 'xu'
-    def pyFmt(self, fieldF): return f'0x{{{fieldF(self.stiV[0])}:x}}'
+class VoidPtrPyTyp(PyTyp):
+    def getr(self, pre): return f'PyBytes_FromStringAndSize((const char*){pre}{self.sti.iden}, sizeof(void*))'
+    def fmt(self, fieldF): return f'0x{{{fieldF(self.stiV[0])}.hex()}}'
 
-class XU8Mtyp(UlongMtyp):
-    Nick = 'xu8'
-    def pyFmt(self, fieldF): return f'0x{{{fieldF(self.stiV[0])}:02x}}'
+class XUPyTyp(PyTyp):
+    def fmt(self, fieldF): return f'0x{{{fieldF(self.stiV[0])}:x}}'
 
-class XU16Mtyp(UlongMtyp):
-    Nick = 'xu16'
-    def pyFmt(self, fieldF): return f'0x{{{fieldF(self.stiV[0])}:04x}}'
+class XU8PyTyp(PyTyp):
+    def fmt(self, fieldF): return f'0x{{{fieldF(self.stiV[0])}:02x}}'
 
-class XU32Mtyp(UlongMtyp):
-    Nick = 'xu32'
-    def pyFmt(self, fieldF): return f'0x{{{fieldF(self.stiV[0])}:08x}}'
+class XU16PyTyp(PyTyp):
+    def fmt(self, fieldF): return f'0x{{{fieldF(self.stiV[0])}:04x}}'
 
-class XU64Mtyp(UlongMtyp):
-    Nick = 'xu64'
-    def pyFmt(self, fieldF): return f'0x{{{fieldF(self.stiV[0])}:016x}}'
+class XU32PyTyp(PyTyp):
+    def fmt(self, fieldF): return f'0x{{{fieldF(self.stiV[0])}:08x}}'
+
+class XU64PyTyp(PyTyp):
+    def fmt(self, fieldF): return f'0x{{{fieldF(self.stiV[0])}:016x}}'
+
+class ZArrayPyTyp(PyTyp):
+    def getr(self, pre): return f'McpyTupleSize_t({pre}{self.sti.iden}, {self.sti.child.toksS()})'
+    def fmt(self, fieldF): return f'{{{fieldF(self.stiV[0])}}}'
+
+#------------------------------------------------------------------------------------------------------------------------
+# TypPrim
+#------------------------------------------------------------------------------------------------------------------------
+
+class BoolTyp(TypPrim):
+    def pyTypClasGet(self): return LongPyTyp
+
+class CTyp(TypPrim):
+    def pyTypClasGet(self): return LongPyTyp
+
+class CDTyp(TypPrim):
+    def pyTypClasGet(self): return ComplexFloatPyTyp
+    
+class CFTyp(TypPrim):
+    def pyTypClasGet(self): return ComplexFloatPyTyp
+    
+class CLDTyp(TypPrim):
+    def pyTypClasGet(self): return ComplexFloatPyTyp
+    
+class DTyp(TypPrim):
+    def pyTypClasGet(self): return FloatPyTyp
+
+class FTyp(TypPrim):
+    def pyTypClasGet(self): return FloatPyTyp
+    
+class ITyp(TypPrim):
+    def pyTypClasGet(self): return LongPyTyp
+    
+class LTyp(TypPrim):
+    def pyTypClasGet(self): return LongPyTyp
+    
+class LDTyp(TypPrim):
+    def pyTypClasGet(self): return FloatPyTyp
+
+class LLTyp(TypPrim):
+    def pyTypClasGet(self): return LongPyTyp
+    
+class STyp(TypPrim):
+    def pyTypClasGet(self): return LongPyTyp
+    
+class UTyp(TypPrim):
+    def pyTypClasGet(self): return UlongPyTyp
+    
+class UCTyp(TypPrim):
+    def pyTypClasGet(self): return UlongPyTyp
+    
+class ULTyp(TypPrim):
+    def pyTypClasGet(self): return UlongPyTyp
+    
+class ULLTyp(TypPrim):
+    def pyTypClasGet(self): return UlongPyTyp
+    
+class USTyp(TypPrim):
+    def pyTypClasGet(self): return UlongPyTyp
+    
+class VoidTyp(TypPrim): pass
+
+#------------------------------------------------------------------------------------------------------------------------
+# TypIden
+#------------------------------------------------------------------------------------------------------------------------
+
+class I8Typ(TypIden):
+    def pyTypClasGet(self): return LongPyTyp
+    
+class I16Typ(TypIden):
+    def pyTypClasGet(self): return LongPyTyp
+    
+class I32Typ(TypIden):
+    def pyTypClasGet(self): return LongPyTyp
+    
+class I64Typ(TypIden):
+    def pyTypClasGet(self): return LongPyTyp
+    
+class U8Typ(TypIden):
+    def pyTypClasGet(self): return UlongPyTyp
+    def pyTypPtrClasGet(self): return U8PtrPyTyp
+    
+class U16Typ(TypIden):
+    def pyTypClasGet(self): return UlongPyTyp
+    
+class U32Typ(TypIden):
+    def pyTypClasGet(self): return UlongPyTyp
+    
+class U64Typ(TypIden):
+    def pyTypClasGet(self): return UlongPyTyp
+    
+class ZTyp(TypIden):
+    def pyTypClasGet(self): return UlongPyTyp
+    def pyTypArrayClasGet(self): return ZArrayPyTyp
+    
+class Id32Typ(TypIden):
+    def pyTypClasGet(self): return Id32PyTyp
+
+class Id128Typ(TypIden):
+    def pyTypClasGet(self): return Id128PyTyp
+    
+class PyObjectTyp(TypIden):
+    def pyTypPtrClasGet(self): return PyObjectPtrPyTyp
 
 #------------------------------------------------------------------------------------------------------------------------
 # init
 #------------------------------------------------------------------------------------------------------------------------
 
-def fragrPopulate0(fragr):
-    fragr.specSlst = 1
+def initScope0(fragr):
+    scope = Scope(ScopeGlo())
+    scope.primPut(BoolTyp(SpecFlag.TypSpecBool))
+    scope.primPut(CTyp(SpecFlag.TypSpecChar), # todo signed or unsigned
+                  SpecFlag.TypSpecSigned | SpecFlag.TypSpecChar)
+    scope.primPut(CDTyp(SpecFlag.TypSpecComplex | SpecFlag.TypSpecDouble))
+    scope.primPut(CFTyp(SpecFlag.TypSpecComplex | SpecFlag.TypSpecFloat))
+    scope.primPut(CLDTyp(SpecFlag.TypSpecComplex | SpecFlag.TypSpecLong1 | SpecFlag.TypSpecDouble))
+    scope.primPut(DTyp(SpecFlag.TypSpecDouble))
+    scope.primPut(FTyp(SpecFlag.TypSpecFloat))
+    scope.primPut(ITyp(SpecFlag.TypSpecInt),
+                  SpecFlag.TypSpecSigned,
+                  SpecFlag.TypSpecSigned | SpecFlag.TypSpecInt)
+    scope.primPut(LTyp(SpecFlag.TypSpecLong1),
+                  SpecFlag.TypSpecLong1 | SpecFlag.TypSpecInt,
+                  SpecFlag.TypSpecSigned | SpecFlag.TypSpecLong1,
+                  SpecFlag.TypSpecSigned | SpecFlag.TypSpecLong1 | SpecFlag.TypSpecInt)
+    scope.primPut(LDTyp(SpecFlag.TypSpecLong1 | SpecFlag.TypSpecDouble))
+    scope.primPut(LLTyp(SpecFlag.TypSpecLong2),
+                  SpecFlag.TypSpecLong2 | SpecFlag.TypSpecInt,
+                  SpecFlag.TypSpecSigned | SpecFlag.TypSpecLong2,
+                  SpecFlag.TypSpecSigned | SpecFlag.TypSpecLong2 | SpecFlag.TypSpecInt)
+    scope.primPut(STyp(SpecFlag.TypSpecShort),
+                  SpecFlag.TypSpecShort | SpecFlag.TypSpecInt,
+                  SpecFlag.TypSpecSigned | SpecFlag.TypSpecShort,
+                  SpecFlag.TypSpecSigned | SpecFlag.TypSpecShort | SpecFlag.TypSpecInt)
+    scope.primPut(UTyp(SpecFlag.TypSpecUnsigned),
+                  SpecFlag.TypSpecUnsigned | SpecFlag.TypSpecInt)
+    scope.primPut(UCTyp(SpecFlag.TypSpecUnsigned | SpecFlag.TypSpecChar))
+    scope.primPut(ULTyp(SpecFlag.TypSpecUnsigned | SpecFlag.TypSpecLong1),
+                  SpecFlag.TypSpecUnsigned | SpecFlag.TypSpecLong1 | SpecFlag.TypSpecInt)
+    scope.primPut(ULLTyp(SpecFlag.TypSpecUnsigned | SpecFlag.TypSpecLong2),
+                  SpecFlag.TypSpecUnsigned | SpecFlag.TypSpecLong2 | SpecFlag.TypSpecInt)
+    scope.primPut(USTyp(SpecFlag.TypSpecUnsigned | SpecFlag.TypSpecShort),
+                  SpecFlag.TypSpecUnsigned | SpecFlag.TypSpecShort | SpecFlag.TypSpecInt)
+    scope.primPut(VoidTyp(SpecFlag.TypSpecVoid))
 
-    def addPrim(mtypClas, typFlags, *flagss):
-        typ = TypPrim(typFlags)
-        fragr.symtab.primPut(typ, *flagss)
-        fragr.symtab.mtypTriePutTypV((typ,), mtypClas)
+    scope.idenPutTyp(I8Typ('int8_t'), None)
+    scope.idenPutTyp(I16Typ('int16_t'), None)
+    scope.idenPutTyp(I32Typ('int32_t'), None)
+    scope.idenPutTyp(I64Typ('int64_t'), None)
+    scope.idenPutTyp(U8Typ('uint8_t'), None)
+    scope.idenPutTyp(U16Typ('uint16_t'), None)
+    scope.idenPutTyp(U32Typ('uint32_t'), None)
+    scope.idenPutTyp(U64Typ('uint64_t'), None)
+    scope.idenPutTyp(ZTyp('size_t'), None)
+    scope.idenPutTyp(Id32Typ('BitId32'), None)
+    scope.idenPutTyp(Id128Typ('BitId128'), None)
+    scope.idenPutTyp(PyObjectTyp('PyObject'), None)
 
-    addPrim(BoolMtyp, SpecFlag.TypSpecBool)
-    addPrim(CMtyp, SpecFlag.TypSpecChar, # todo signed or unsigned
-            SpecFlag.TypSpecSigned | SpecFlag.TypSpecChar)
-    addPrim(CDMtyp, SpecFlag.TypSpecComplex | SpecFlag.TypSpecDouble)
-    addPrim(CFMtyp, SpecFlag.TypSpecComplex | SpecFlag.TypSpecFloat)
-    addPrim(CLDMtyp, SpecFlag.TypSpecComplex | SpecFlag.TypSpecLong1 | SpecFlag.TypSpecDouble)
-    addPrim(DMtyp, SpecFlag.TypSpecDouble)
-    addPrim(FMtyp, SpecFlag.TypSpecFloat)
-    addPrim(IMtyp, SpecFlag.TypSpecInt,
-            SpecFlag.TypSpecSigned,
-            SpecFlag.TypSpecSigned | SpecFlag.TypSpecInt)
-    addPrim(LMtyp, SpecFlag.TypSpecLong1,
-            SpecFlag.TypSpecLong1 | SpecFlag.TypSpecInt,
-            SpecFlag.TypSpecSigned | SpecFlag.TypSpecLong1,
-            SpecFlag.TypSpecSigned | SpecFlag.TypSpecLong1 | SpecFlag.TypSpecInt)
-    addPrim(LDMtyp, SpecFlag.TypSpecLong1 | SpecFlag.TypSpecDouble)
-    addPrim(LLMtyp, SpecFlag.TypSpecLong1 | SpecFlag.TypSpecLong2,
-            SpecFlag.TypSpecLong1 | SpecFlag.TypSpecLong2 | SpecFlag.TypSpecInt,
-            SpecFlag.TypSpecSigned | SpecFlag.TypSpecLong1 | SpecFlag.TypSpecLong2,
-            SpecFlag.TypSpecSigned | SpecFlag.TypSpecLong1 | SpecFlag.TypSpecLong2 | SpecFlag.TypSpecInt)
-    addPrim(SMtyp, SpecFlag.TypSpecShort,
-            SpecFlag.TypSpecShort | SpecFlag.TypSpecInt,
-            SpecFlag.TypSpecSigned | SpecFlag.TypSpecShort,
-            SpecFlag.TypSpecSigned | SpecFlag.TypSpecShort | SpecFlag.TypSpecInt)
-    addPrim(UMtyp, SpecFlag.TypSpecUnsigned,
-            SpecFlag.TypSpecUnsigned | SpecFlag.TypSpecInt)
-    addPrim(UCMtyp, SpecFlag.TypSpecUnsigned | SpecFlag.TypSpecChar)
-    addPrim(ULMtyp, SpecFlag.TypSpecUnsigned | SpecFlag.TypSpecLong1,
-            SpecFlag.TypSpecUnsigned | SpecFlag.TypSpecLong1 | SpecFlag.TypSpecInt)
-    addPrim(ULLMtyp, SpecFlag.TypSpecUnsigned | SpecFlag.TypSpecLong1 | SpecFlag.TypSpecLong2,
-            SpecFlag.TypSpecUnsigned | SpecFlag.TypSpecLong1 | SpecFlag.TypSpecLong2 | SpecFlag.TypSpecInt)
-    addPrim(USMtyp, SpecFlag.TypSpecUnsigned | SpecFlag.TypSpecShort,
-            SpecFlag.TypSpecUnsigned | SpecFlag.TypSpecShort | SpecFlag.TypSpecInt)
-    addPrim(VoidMtyp, SpecFlag.TypSpecVoid)
+    return scope
 
-    def addIden(mtypClas, typIden):
-        typ = TypIden(typIden)
-        fragr.symtab.idenPut(typ, None)
-        fragr.symtab.mtypTriePutTypV((typ,), mtypClas)
-
-    addIden(I8Mtyp, 'int8_t')
-    addIden(I16Mtyp, 'int16_t')
-    addIden(I32Mtyp, 'int32_t')
-    addIden(I64Mtyp, 'int64_t')
-    addIden(U8Mtyp, 'uint8_t')
-    addIden(U16Mtyp, 'uint16_t')
-    addIden(U32Mtyp, 'uint32_t')
-    addIden(U64Mtyp, 'uint64_t')
-    addIden(ZMtyp, 'size_t')
-    addIden(Id32Mtyp, 'BitId32')
-    addIden(Id128Mtyp, 'BitId128')
-    addIden(PyObjectMtyp, 'PyObject')
-    
-    def addSV(mtypClas, *typSV):
-        fragr.symtab.mtypTriePutTypV([fragr.typStiFromStr(typS).child for typS in typSV], mtypClas)
-        
-    addSV(Id3v2EncodingMtyp, '/*id3v2Encoding*/ unsigned int')
-    addSV(XUMtyp, '/*x*/ unsigned int')
-    addSV(XU8Mtyp, '/*x*/ uint8_t')
-    addSV(XU16Mtyp, '/*x*/ uint16_t')
-    addSV(XU32Mtyp, '/*x*/ uint32_t')
-    addSV(XU64Mtyp, '/*x*/ uint64_t')
-    
-    addSV(BMtyp, 'const uint8_t *', 'const uint8_t *')
-    
-    addSV(ZArrayMtyp, 'size_t []')
-    
-    #add(AufiETyp('aufiE', 'AufiE'))
-
-    fragr.voidPtrSti = fragr.typStiFromStr('void *')
-    fragr.pyObjectPtrSelfSti = fragr.typStiFromStr('PyObject *self')
-    #fragr.symtab.mtypTriePutTypV((fragr.pyObjectPtrSelf.child,), PyObjectPtrMtyp)
-    #todofragr.voidPtrMtyp = VoidPtrMtyp
-    #addSV(VoidPtrMtyp, 'void *')
-    #todofragr.pyObjectPtrMtyp = PyObjectPtrMtyp('pyoPtr')
-    #fragr.symtab.mtypTriePutTypV((fragr.pyObjectPtrSelf.child,), PyObjectPtrMtyp)
-
-    return fragr

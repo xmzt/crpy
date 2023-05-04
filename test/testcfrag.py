@@ -2,9 +2,9 @@
 #------------------------------------------------------------------------------------------------------------------------
 # Usage
 #
-# ./testcfrag.py -p struct -dumpScope
-# ./testcfrag.py -s 'int x;' -dumpScope
-# ./testcfrag.py -f <file> -dumpScope
+# ./testcfrag.py -p struct -dump
+# ./testcfrag.py -s 'int x;' -dump
+# ./testcfrag.py -f <file> -dump
 #------------------------------------------------------------------------------------------------------------------------
 
 import os
@@ -15,9 +15,10 @@ sys.path[1:1] = [
     os.path.normpath(os.path.join(scriptDir, '../../pylib0/src')),
 ]
 
-from crpy_xmzt.cpylib import CpyCbColl,CpyStruct
-from crpy_xmzt.ctoklib import TokTyp
-from crpy_xmzt.ctyplib import fragr0
+from crpy_xmzt import cpylib
+from crpy_xmzt import castlib
+from crpy_xmzt import cfraglib
+from crpy_xmzt import ctyplib
 from pylib0_xmzt import loglib,optslib
 
 prefabs = { 'aufi':r'''
@@ -71,10 +72,13 @@ typedef struct ugga {
 ''',
             'enum':r'''
 enum {
-shit = 4,
-fuck,
-ass = 3 5 6 23
+foo = 4,
+bar,
+huh = 3 5 6 23
 } typedef dognasty;
+enum named {
+ghi = 3
+} typedef chicken;
 ''',
             'prim':r'''
 long x;
@@ -94,40 +98,43 @@ typedef volatile _Atomic(a*restrict) f;
 '''
 }
 
-class Main(optslib.Main2):
+class Main(optslib.Argr):
     def __init__(self):
         super().__init__(self)
-        self.dbgLog(self.logCfragTok, 0)
-        self.dbgLog(self.logCfragStack, 0)
-        self.specSlst = 1
-
-    def argPostKvInit(self):
+        self.dumpUp = 0
+        self.fragr = cfraglib.Fragr(specSlst=1)
+        self.kvLog('fragr.logTok', 0, lambda tok,state: self.logr(f'[cfragTok] <{tok.pos}> {state} | {tok.typ.iden} {tok.val!r}'))
+        self.kvLog('fragr.logStack', 0, lambda fragr: fragr.stackDump(self.logr, '[cfragStack] '))
+        
+    def opGo(self):
         self.logr = loglib.Logr5File()
-        self.fragr = fragr0(self)
-        self.scope = self.fragr.symtab.scopeSetNew0()
+        self.scope0 = ctyplib.initScope0(self.fragr)
+        self.scope = self.scope0.dn()
+        self.opGo = super().opGo
+        self.opGo()
         
     def s(self, arg):
-        self.fragr.goStart(arg)
+        self.fragr.goStart(self.scope, arg)
 
     def f(self, arg):
         with open(arg, 'r') as f:
-            self.fragr.goStart(f.read())
+            self.fragr.goStart(self.scope, f.read())
 
     def p(self, arg):
-        self.fragr.goStart(prefabs.get(arg))
+        self.fragr.goStart(self.scope, prefabs.get(arg))
 
     def typ(self, arg):
-        sti = self.fragr.typFromStr(arg)
-        sti.dump(self.logr, '[STI] ')
+        sti = self.fragr.typFromStr(self.scope, arg)
+        sti.dump(self.logr, '[sti] ')
 
-    def dumpScope(self):
-        self.fragr.symtab.dumpScope(self.logr, self.scope)
+    def dump(self):
+        self.scope.dump(self.logr, '', self.dumpUp)
 
-    def dumpScopeCanon(self):
-        self.fragr.symtab.dumpScopeCanon(self.logr, self.scope)
+    def dumpCanon(self):
+        self.scope.dumpCanon(self.logr, '', self.dumpUp)
 
     def cpycb(self):
-        coll = CpyCbColl(lambda sig: f'CB_{sig}')
+        coll = cpylib.CpyCbColl(lambda sig: f'CB_{sig}')
         for k,sti in self.scope.items():
             if str is type(k) and sti.typP() and sti.child.funP():
                 coll.addParamV(sti.child.paramV, self.fragr)
@@ -139,10 +146,7 @@ class Main(optslib.Main2):
     def cpystruct(self):
         for k,sti in self.scope.items():
             if str is type(k) and sti.typP() and sti.child.structP():
-                cpys = CpyStruct('STRUCT', 'TP_NAME', 'STRUCT_INIT', sti.child.items, self.fragr)
+                cpys = cpylib.CpyStruct('STRUCT', 'TP_NAME', 'STRUCT_INIT', sti.child.items, self.fragr)
                 print(cpys.codeCpyC())
         
-    def logCfragTok(self, tok, state): self.logr(f'[cfragTok] <{tok.pos}> {state} | {tok.typ.iden} {tok.val!r}')
-    def logCfragStack(self, fragr): fragr.stackDump(self.logr, '[cfragStack] ')
-
-Main().go(sys.argv[1:], 1)
+Main().argVGo(sys.argv[1:], 1)
